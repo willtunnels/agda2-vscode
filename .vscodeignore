@@ -8,3 +8,6 @@ test/**
 tsconfig.json
 esbuild.js
 eslint.config.mjs
+
+.agda-test-binaries
+.husky
