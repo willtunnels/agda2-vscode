@@ -1,0 +1,32 @@
+{
+  "name": "Agda",
+  "scopeName": "source.agda",
+  "patterns": [
+    { "include": "#line-comment" },
+    { "include": "#block-comment" },
+    { "include": "#string" }
+  ],
+  "repository": {
+    "line-comment": {
+      "match": "(?<![^\\s(){}\";@.])--.*$",
+      "name": "comment.line.double-dash.agda"
+    },
+    "block-comment": {
+      "begin": "\\{-(?!#)",
+      "end": "-\\}",
+      "name": "comment.block.agda",
+      "patterns": [{ "include": "#block-comment" }]
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.agda",
+      "patterns": [
+        {
+          "match": "\\\\.",
+          "name": "constant.character.escape.agda"
+        }
+      ]
+    }
+  }
+}

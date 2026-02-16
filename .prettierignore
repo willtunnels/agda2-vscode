@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.agdai
+
+package-lock.json
+src/unicode/abbreviations.json

@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "module": "Preserve",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmit": true,
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "paths": {
+      "vscode": ["./__mocks__/vscode.ts"]
+    }
+  },
+  "include": [".", "../src"]
+}

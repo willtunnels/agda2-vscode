@@ -1,0 +1,1085 @@
+{
+  "name": "agda2-vscode",
+  "displayName": "Agda",
+  "description": "Interactive development for Agda",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "publisher": "bdrisc",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/willtunnels/agda2-vscode.git"
+  },
+  "icon": "icon.png",
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "agda",
+        "aliases": [
+          "Agda",
+          "agda"
+        ],
+        "extensions": [
+          ".agda",
+          ".lagda",
+          ".lagda.md",
+          ".lagda.rst",
+          ".lagda.tex"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/agda-light.png",
+          "dark": "./icons/agda-dark.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "agda",
+        "scopeName": "source.agda",
+        "path": "./syntaxes/agda.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "agda.downloadAgda",
+        "title": "Download Agda",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.switchAgda",
+        "title": "Switch Agda Version",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.load",
+        "title": "Load",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.give",
+        "title": "Give",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.elaborateGive",
+        "title": "Elaborate and Give",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.refine",
+        "title": "Refine",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.auto",
+        "title": "Auto",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.makeCase",
+        "title": "Case Split",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.goalType",
+        "title": "Goal Type",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.goalTypeAndContext",
+        "title": "Goal Type and Context",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.goalTypeContextInfer",
+        "title": "Goal Type, Context, and Inferred Type",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.goalTypeContextCheck",
+        "title": "Goal Type, Context, and Checked Type",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.context",
+        "title": "Context",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.helperFunctionType",
+        "title": "Helper Function Type",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.inferType",
+        "title": "Infer Type",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.computeNormalForm",
+        "title": "Compute Normal Form",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.whyInScope",
+        "title": "Why In Scope",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.searchAbout",
+        "title": "Search About",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.moduleContents",
+        "title": "Module Contents",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.showConstraints",
+        "title": "Show Constraints",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.showGoals",
+        "title": "Show Goals",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.solve",
+        "title": "Solve",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.nextGoal",
+        "title": "Next Goal",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.previousGoal",
+        "title": "Previous Goal",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.toggleInfoPanel",
+        "title": "Toggle Info Panel",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.toggleImplicitArgs",
+        "title": "Toggle Implicit Arguments",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.toggleIrrelevantArgs",
+        "title": "Toggle Irrelevant Arguments",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.removeAnnotations",
+        "title": "Remove Annotations",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.showVersion",
+        "title": "Show Version",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.restart",
+        "title": "Restart",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.compile",
+        "title": "Compile",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.abort",
+        "title": "Abort",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.keySequence.leader",
+        "title": "Key Sequence: Leader",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.keySequence.m",
+        "title": "Key Sequence: M",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.keySequence.x",
+        "title": "Key Sequence: X",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.keySequence.u",
+        "title": "Key Sequence: U (Universal Argument)",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.keySequence.escape",
+        "title": "Key Sequence: Cancel",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.keySequence.cc-x",
+        "title": "Key Sequence: Ctrl+C Ctrl+X (Extended Prefix)",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.keySequence.cc-u",
+        "title": "Key Sequence: Ctrl+C Ctrl+U (Universal Argument)",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.input.cycleForward",
+        "title": "Unicode Input: Cycle Forward",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.input.cycleBackward",
+        "title": "Unicode Input: Cycle Backward",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.vimUndo",
+        "title": "Vim Undo (with goal tracking)",
+        "category": "Agda"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "agda.input.cycleForward",
+        "key": "tab",
+        "when": "editorTextFocus && editorLangId == agda && agda.input.isActive"
+      },
+      {
+        "command": "agda.input.cycleBackward",
+        "key": "shift+tab",
+        "when": "editorTextFocus && editorLangId == agda && agda.input.isActive"
+      },
+      {
+        "command": "agda.vimUndo",
+        "key": "u",
+        "when": "editorTextFocus && vim.active && vim.mode == 'Normal' && editorLangId == agda && agda.keySequence == ''"
+      },
+      {
+        "command": "agda.keySequence.leader",
+        "key": "space",
+        "when": "editorTextFocus && vim.active && vim.mode == 'Normal' && editorLangId == agda && agda.keySequence == ''"
+      },
+      {
+        "command": "agda.keySequence.escape",
+        "key": "escape",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence != ''"
+      },
+      {
+        "command": "agda.keySequence.m",
+        "key": "m",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader'"
+      },
+      {
+        "command": "agda.load",
+        "key": "l",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.give",
+        "key": "space",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.refine",
+        "key": "r",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.auto",
+        "key": "a",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.makeCase",
+        "key": "c",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.goalType",
+        "key": "t",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.goalTypeAndContext",
+        "key": ",",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.goalTypeContextInfer",
+        "key": ".",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.goalTypeContextCheck",
+        "key": ";",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.context",
+        "key": "e",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.helperFunctionType",
+        "key": "h",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.inferType",
+        "key": "d",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.computeNormalForm",
+        "key": "n",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.whyInScope",
+        "key": "w",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.searchAbout",
+        "key": "z",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.moduleContents",
+        "key": "p",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.showConstraints",
+        "key": "=",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.showGoals",
+        "key": "shift+/",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.solve",
+        "key": "s",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.nextGoal",
+        "key": "f",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.previousGoal",
+        "key": "b",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.toggleInfoPanel",
+        "key": "i",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.keySequence.u",
+        "key": "u",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.keySequence.x",
+        "key": "x",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m'"
+      },
+      {
+        "command": "agda.restart",
+        "key": "r",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-x'"
+      },
+      {
+        "command": "agda.abort",
+        "key": "a",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-x'"
+      },
+      {
+        "command": "agda.toggleImplicitArgs",
+        "key": "h",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-x'"
+      },
+      {
+        "command": "agda.toggleIrrelevantArgs",
+        "key": "i",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-x'"
+      },
+      {
+        "command": "agda.removeAnnotations",
+        "key": "d",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-x'"
+      },
+      {
+        "command": "agda.compile",
+        "key": "c",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-x'"
+      },
+      {
+        "command": "agda.keySequence.u",
+        "key": "u",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.give",
+        "key": "space",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.elaborateGive",
+        "key": "m",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.refine",
+        "key": "r",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.auto",
+        "key": "a",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.goalType",
+        "key": "t",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.goalTypeAndContext",
+        "key": ",",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.goalTypeContextInfer",
+        "key": ".",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.goalTypeContextCheck",
+        "key": ";",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.context",
+        "key": "e",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.helperFunctionType",
+        "key": "h",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.inferType",
+        "key": "d",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.computeNormalForm",
+        "key": "n",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.whyInScope",
+        "key": "w",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.searchAbout",
+        "key": "z",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.moduleContents",
+        "key": "p",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.showConstraints",
+        "key": "=",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.showGoals",
+        "key": "shift+/",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.solve",
+        "key": "s",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'leader-m-u'"
+      },
+      {
+        "command": "agda.load",
+        "key": "ctrl+c ctrl+l",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.give",
+        "key": "ctrl+c ctrl+space",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.refine",
+        "key": "ctrl+c ctrl+r",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.auto",
+        "key": "ctrl+c ctrl+a",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.makeCase",
+        "key": "ctrl+c ctrl+c",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.goalType",
+        "key": "ctrl+c ctrl+t",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.goalTypeAndContext",
+        "key": "ctrl+c ctrl+,",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.goalTypeContextInfer",
+        "key": "ctrl+c ctrl+.",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.goalTypeContextCheck",
+        "key": "ctrl+c ctrl+;",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.context",
+        "key": "ctrl+c ctrl+e",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.helperFunctionType",
+        "key": "ctrl+c ctrl+h",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.inferType",
+        "key": "ctrl+c ctrl+d",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.computeNormalForm",
+        "key": "ctrl+c ctrl+n",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.whyInScope",
+        "key": "ctrl+c ctrl+w",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.searchAbout",
+        "key": "ctrl+c ctrl+z",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.moduleContents",
+        "key": "ctrl+c ctrl+o",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.showConstraints",
+        "key": "ctrl+c ctrl+=",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.showGoals",
+        "key": "ctrl+c ctrl+shift+/",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.solve",
+        "key": "ctrl+c ctrl+s",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.nextGoal",
+        "key": "ctrl+c ctrl+f",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.previousGoal",
+        "key": "ctrl+c ctrl+b",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.toggleInfoPanel",
+        "key": "ctrl+c ctrl+i",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.keySequence.cc-x",
+        "key": "ctrl+c ctrl+x",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.keySequence.cc-u",
+        "key": "ctrl+c ctrl+u",
+        "when": "editorTextFocus && editorLangId == agda"
+      },
+      {
+        "command": "agda.restart",
+        "key": "ctrl+r",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-x'"
+      },
+      {
+        "command": "agda.abort",
+        "key": "ctrl+a",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-x'"
+      },
+      {
+        "command": "agda.toggleImplicitArgs",
+        "key": "ctrl+h",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-x'"
+      },
+      {
+        "command": "agda.toggleIrrelevantArgs",
+        "key": "ctrl+i",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-x'"
+      },
+      {
+        "command": "agda.removeAnnotations",
+        "key": "ctrl+d",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-x'"
+      },
+      {
+        "command": "agda.keySequence.cc-u",
+        "key": "ctrl+u",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.give",
+        "key": "ctrl+space",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.elaborateGive",
+        "key": "ctrl+m",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.refine",
+        "key": "ctrl+r",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.auto",
+        "key": "ctrl+a",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.goalType",
+        "key": "ctrl+t",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.goalTypeAndContext",
+        "key": "ctrl+,",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.goalTypeContextInfer",
+        "key": "ctrl+.",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.goalTypeContextCheck",
+        "key": "ctrl+;",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.context",
+        "key": "ctrl+e",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.helperFunctionType",
+        "key": "ctrl+h",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.inferType",
+        "key": "ctrl+d",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.computeNormalForm",
+        "key": "ctrl+n",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.whyInScope",
+        "key": "ctrl+w",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.searchAbout",
+        "key": "ctrl+z",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.moduleContents",
+        "key": "ctrl+o",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.showConstraints",
+        "key": "ctrl+=",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.showGoals",
+        "key": "ctrl+shift+/",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      },
+      {
+        "command": "agda.solve",
+        "key": "ctrl+s",
+        "when": "editorTextFocus && editorLangId == agda && agda.keySequence == 'cc-u'"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "scopes": {
+          "keyword": [
+            "keyword.other.agda"
+          ],
+          "comment": [
+            "comment.block.agda"
+          ],
+          "string": [
+            "string.quoted.double.agda"
+          ],
+          "number": [
+            "constant.numeric.agda"
+          ],
+          "type": [
+            "entity.name.type.agda"
+          ],
+          "function": [
+            "entity.name.function.agda"
+          ],
+          "variable": [
+            "variable.other.agda"
+          ],
+          "parameter": [
+            "variable.parameter.agda"
+          ],
+          "property": [
+            "variable.other.property.agda"
+          ],
+          "enumMember": [
+            "variable.other.enummember.agda"
+          ],
+          "namespace": [
+            "entity.name.namespace.agda"
+          ],
+          "struct": [
+            "entity.name.type.struct.agda"
+          ],
+          "operator": [
+            "keyword.operator.agda"
+          ],
+          "macro": [
+            "entity.name.function.macro.agda"
+          ]
+        }
+      }
+    ],
+    "colors": [
+      {
+        "id": "agda.hole.background",
+        "description": "Background color for Agda goal holes",
+        "defaults": {
+          "light": "#729FCF30",
+          "dark": "#729FCF30",
+          "highContrast": "#729FCF50",
+          "highContrastLight": "#729FCF50"
+        }
+      },
+      {
+        "id": "agda.hole.border",
+        "description": "Border color for Agda goal holes",
+        "defaults": {
+          "light": "#729FCF80",
+          "dark": "#729FCF80",
+          "highContrast": "#729FCFA0",
+          "highContrastLight": "#729FCFA0"
+        }
+      },
+      {
+        "id": "agda.unsolvedMeta.background",
+        "description": "Background color for unsolved metas",
+        "defaults": {
+          "light": "#FFFF004D",
+          "dark": "#806B004D",
+          "highContrast": "#FFFF004D",
+          "highContrastLight": "#FFFF004D"
+        }
+      },
+      {
+        "id": "agda.unsolvedConstraint.background",
+        "description": "Background color for unsolved constraints",
+        "defaults": {
+          "light": "#FFFF004D",
+          "dark": "#806B004D",
+          "highContrast": "#FFFF004D",
+          "highContrastLight": "#FFFF004D"
+        }
+      },
+      {
+        "id": "agda.terminationProblem.background",
+        "description": "Background color for termination problems",
+        "defaults": {
+          "light": "#FFA5004D",
+          "dark": "#80530040",
+          "highContrast": "#FFA5004D",
+          "highContrastLight": "#FFA5004D"
+        }
+      },
+      {
+        "id": "agda.positivityProblem.background",
+        "description": "Background color for positivity problems",
+        "defaults": {
+          "light": "#FFA5004D",
+          "dark": "#80530040",
+          "highContrast": "#FFA5004D",
+          "highContrastLight": "#FFA5004D"
+        }
+      },
+      {
+        "id": "agda.coverageProblem.background",
+        "description": "Background color for coverage problems",
+        "defaults": {
+          "light": "#FFA5004D",
+          "dark": "#80530040",
+          "highContrast": "#FFA5004D",
+          "highContrastLight": "#FFA5004D"
+        }
+      },
+      {
+        "id": "agda.confluenceProblem.background",
+        "description": "Background color for confluence problems",
+        "defaults": {
+          "light": "#FF00FF33",
+          "dark": "#80008033",
+          "highContrast": "#FF00FF33",
+          "highContrastLight": "#FF00FF33"
+        }
+      },
+      {
+        "id": "agda.incompletePattern.background",
+        "description": "Background color for incomplete patterns",
+        "defaults": {
+          "light": "#FFA50033",
+          "dark": "#80530033",
+          "highContrast": "#FFA50033",
+          "highContrastLight": "#FFA50033"
+        }
+      },
+      {
+        "id": "agda.typeChecks.background",
+        "description": "Background color for code being type-checked",
+        "defaults": {
+          "light": "#ADD8E64D",
+          "dark": "#1A3A4D4D",
+          "highContrast": "#ADD8E64D",
+          "highContrastLight": "#ADD8E64D"
+        }
+      },
+      {
+        "id": "agda.shadowingInTelescope.background",
+        "description": "Background color for variables shadowing in a telescope",
+        "defaults": {
+          "light": "#80808030",
+          "dark": "#80808030",
+          "highContrast": "#80808040",
+          "highContrastLight": "#80808040"
+        }
+      },
+      {
+        "id": "agda.catchallClause.background",
+        "description": "Background color for catch-all clauses",
+        "defaults": {
+          "light": "#C8C8C826",
+          "dark": "#40404026",
+          "highContrast": "#C8C8C826",
+          "highContrastLight": "#C8C8C826"
+        }
+      },
+      {
+        "id": "agda.instanceProblem.background",
+        "description": "Background color for instance problems",
+        "defaults": {
+          "light": "#F5DEB34D",
+          "dark": "#80530040",
+          "highContrast": "#F5DEB34D",
+          "highContrastLight": "#F5DEB34D"
+        }
+      },
+      {
+        "id": "agda.cosmeticProblem.background",
+        "description": "Background color for cosmetic problems",
+        "defaults": {
+          "light": "#C8C8C826",
+          "dark": "#40404026",
+          "highContrast": "#C8C8C826",
+          "highContrastLight": "#C8C8C826"
+        }
+      }
+    ],
+    "configuration": {
+      "title": "Agda",
+      "properties": {
+        "agda.path": {
+          "type": "string",
+          "default": "agda",
+          "description": "Active Agda binary"
+        },
+        "agda.additionalPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional Agda binaries to show as \"Agda: Switch Agda Version\" options"
+        },
+        "agda.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra command-line arguments passed to Agda"
+        },
+        "agda.backend": {
+          "type": "string",
+          "enum": [
+            "GHC",
+            "GHCNoMain",
+            "JS",
+            "LaTeX",
+            "QuickLaTeX",
+            "HTML"
+          ],
+          "default": "",
+          "description": "Default backend for Agda compilation"
+        },
+        "agda.input.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the Unicode input method (type \\ followed by an abbreviation)"
+        },
+        "agda.input.leader": {
+          "type": "string",
+          "default": "\\",
+          "description": "The leader character that triggers Unicode input"
+        },
+        "agda.input.languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "agda"
+          ],
+          "description": "Languages in which Unicode input is enabled"
+        },
+        "agda.input.customTranslations": {
+          "type": "object",
+          "default": {},
+          "description": "Custom abbreviation overrides (key: abbreviation, value: symbol or array of symbols for Tab-cycling)",
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        },
+        "agda.goalLabels": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show goal ID labels (?0, ?1, ...) next to interaction points"
+        },
+        "agda.reloadOnGive": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically reload the file after give or refine actions"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "npm run check-types && node esbuild.js",
+    "check-types": "tsc --noEmit",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "vscode:prepublish": "npm run package",
+    "package": "npm run check-types && node esbuild.js --production",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.1",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.0",
+    "husky": "^9.1.7",
+    "jest-mock-vscode": "^4.11.0",
+    "lint-staged": "^16.2.7",
+    "npm-run-all": "^4.1.5",
+    "prettier": "^3.8.1",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
+  },
+  "lint-staged": {
+    "*": "prettier --write --ignore-unknown"
+  }
+}

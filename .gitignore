@@ -1,0 +1,8 @@
+# Build artifacts
+node_modules/
+dist/
+*.vsix
+
+# Test artifacts
+.agda-test-binaries/
+*.agdai
