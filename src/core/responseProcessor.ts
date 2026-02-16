@@ -122,7 +122,7 @@ export async function processBatchedResponses(
 
   // MakeCase and (when reloadOnGive is set) GiveAction trigger a full reload
   // after editing. The InteractionPoints in this batch have stale positions
-  // referring to the pre-edit document — skip them since the reload will
+  // referring to the pre-edit document -- skip them since the reload will
   // provide fresh ones.
   const willReload =
     responses.some((r) => r.kind === "MakeCase") ||
@@ -154,7 +154,7 @@ export async function processBatchedResponses(
         if (willReload) break;
         // Expand lone ? to {!  !}, matching Emacs agda2-goals-action.
         // When a give was applied earlier in this batch, Agda's offsets
-        // refer to the pre-give document and are stale — skip the offset-
+        // refer to the pre-give document and are stale -- skip the offset-
         // based ? detection and fall through to forceScan.
         let expanded = false;
         if (!gaveGoal) {

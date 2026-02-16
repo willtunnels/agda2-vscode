@@ -51,7 +51,7 @@ export class AbbreviationRewriter {
 
   /**
    * Deferred extend/shorten operations queued during processChange.
-   * These are NOT started immediately — they are executed sequentially
+   * These are NOT started immediately -- they are executed sequentially
    * by flushPendingOps().  This is critical for multi-cursor: when
    * changeInput processes multiple changes in one batch, earlier
    * processChange calls may shift abbreviation ranges that later
@@ -83,7 +83,7 @@ export class AbbreviationRewriter {
    *   are replaced (even if longer abbreviations exist).
    */
   async triggerAbbreviationReplacement() {
-    // Finished abbreviations (non-matching char typed) — always finalize
+    // Finished abbreviations (non-matching char typed) -- always finalize
     const finished = [...this._finishedAbbreviations];
     this._finishedAbbreviations.clear();
     if (finished.length > 0) {
@@ -140,7 +140,7 @@ export class AbbreviationRewriter {
     );
 
     if (toCycle.length === 0 && toFirstReplace.length === 0) {
-      // Nothing to cycle and nothing complete — do a normal replaceAll (Tab = convert)
+      // Nothing to cycle and nothing complete -- do a normal replaceAll (Tab = convert)
       await this.replaceAllTrackedAbbreviations();
       return true;
     }

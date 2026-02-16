@@ -94,7 +94,7 @@ export { createMockTextEditor } from "jest-mock-vscode/dist/vscode/TextEditor.js
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _mock: any;
 
-// We import vi at the top level — this file is only loaded via the
+// We import vi at the top level -- this file is only loaded via the
 // vitest resolve alias, so vi is always available.
 import { vi } from "vitest";
 import { createVSCodeMock } from "jest-mock-vscode";
@@ -141,7 +141,7 @@ export const env = {
   openExternal: () => Promise.resolve(true),
 };
 
-// SemanticTokensBuilder isn't in extHostTypes — provide a minimal one
+// SemanticTokensBuilder isn't in extHostTypes -- provide a minimal one
 export class SemanticTokensBuilder {
   private _data: number[] = [];
   constructor(_legend?: unknown) {}

@@ -113,13 +113,13 @@ function scanAgdaSource(text: string, onCode: CodeVisitor): void {
 // ---------------------------------------------------------------------------
 
 /**
- * True if `ch` could be part of an Agda identifier — i.e. it is NOT a
+ * True if `ch` could be part of an Agda identifier -- i.e. it is NOT a
  * character that always terminates a name. Whitespace, parentheses, braces,
  * and string boundaries all delimit identifiers in Agda's lexer.
  */
 function isNameChar(ch: string | undefined): boolean {
   if (ch === undefined) return false;
-  // Parentheses and braces are special syntax in Agda — they can never
+  // Parentheses and braces are special syntax in Agda -- they can never
   // appear inside identifiers or operators.
   if (ch === "(" || ch === ")" || ch === "{" || ch === "}") return false;
   return !/\s/.test(ch);
@@ -128,7 +128,7 @@ function isNameChar(ch: string | undefined): boolean {
 /**
  * Replace lone `?` characters in Agda-generated text with `{!  !}`.
  * Skips `?` inside comments, string literals, and existing holes.
- * A `?` is "lone" when it is not adjacent to identifier characters —
+ * A `?` is "lone" when it is not adjacent to identifier characters --
  * whitespace, parens, braces, and string boundaries all count as delimiters.
  */
 export function expandQuestionMarks(text: string): string {
@@ -214,7 +214,7 @@ export class GoalManager implements vscode.Disposable {
     const goals: Goal[] = [];
 
     if (forceScan) {
-      // Agda's ranges are stale after ? expansion — scan for {! !} patterns
+      // Agda's ranges are stale after ? expansion -- scan for {! !} patterns
       const text = document.getText();
       const holeRanges = this.findHoleRanges(text, document);
       for (let i = 0; i < interactionPoints.length && i < holeRanges.length; i++) {

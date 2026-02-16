@@ -31,7 +31,7 @@ describe("mapCursorThroughEdit", () => {
   it("give: {! zero !} → ' zero' (no common prefix/suffix)", () => {
     const old = "{! zero !}";
     const rep = " zero";
-    // P=0, S=0 — cursor clamps to min(offset, new.length)
+    // P=0, S=0 -- cursor clamps to min(offset, new.length)
     expect(mapCursorThroughEdit(old, rep, 0)).toBe(0); // on {
     expect(mapCursorThroughEdit(old, rep, 1)).toBe(1); // on !
     expect(mapCursorThroughEdit(old, rep, 3)).toBe(3); // on z
@@ -91,7 +91,7 @@ describe("mapCursorThroughEdit", () => {
 const agdaBinaries = inject("agdaBinaries");
 
 for (const { version, binaryPath } of agdaBinaries) {
-  describe(`Give/Case cursor position — Agda v${version}`, () => {
+  describe(`Give/Case cursor position -- Agda v${version}`, () => {
     // Work on a temporary copy so we don't modify the fixture
     const fixtureSrc = path.resolve(__dirname, "fixtures", "GiveCase.agda");
     let tmpDir: string;
@@ -133,7 +133,7 @@ for (const { version, binaryPath } of agdaBinaries) {
           .interactionPoints;
         expect(ips.length).toBeGreaterThanOrEqual(2);
 
-        // Goal 0 has content "zero" — give it
+        // Goal 0 has content "zero" -- give it
         const goalId = ips[0].id;
         const giveResponses = await agda.sendCommand(
           `IOTCM ${quoted} NonInteractive Direct (Cmd_give WithoutForce ${goalId} noRange "zero")`,
@@ -192,7 +192,7 @@ for (const { version, binaryPath } of agdaBinaries) {
         const ips = (ipResponse as Extract<AgdaResponse, { kind: "InteractionPoints" }>)
           .interactionPoints;
 
-        // Goal 1 has content "n" — case split on n
+        // Goal 1 has content "n" -- case split on n
         const goalId = ips[1].id;
         const caseResponses = await agda.sendCommand(
           `IOTCM ${quoted} NonInteractive Direct (Cmd_make_case ${goalId} noRange "n")`,
@@ -226,8 +226,8 @@ for (const { version, binaryPath } of agdaBinaries) {
 // ---------------------------------------------------------------------------
 // Part 3: Full end-to-end give flow via EditorTestHarness
 //
-// These tests exercise the complete give pipeline — document mutation, goal
-// tracking, and decoration placement — using the simulated editor harness.
+// These tests exercise the complete give pipeline -- document mutation, goal
+// tracking, and decoration placement -- using the simulated editor harness.
 // They would fail without the fixes in handleGiveAction (? expansion) and
 // processBatchedResponses (forceScan after give).
 // ---------------------------------------------------------------------------
@@ -239,7 +239,7 @@ import { GoalManager } from "../src/core/goals.js";
 import { processBatchedResponses, noopCallbacks } from "../src/core/responseProcessor.js";
 
 for (const { version, binaryPath } of agdaBinaries) {
-  describe(`Give with ? expansion (harness) — Agda v${version}`, () => {
+  describe(`Give with ? expansion (harness) -- Agda v${version}`, () => {
     const fixtureContent = fs.readFileSync(
       path.resolve(__dirname, "fixtures", "GiveWithMeta.agda"),
       "utf-8",
@@ -255,7 +255,7 @@ for (const { version, binaryPath } of agdaBinaries) {
         expect(goalsBefore.length).toBe(1);
         expect(goalsBefore[0].text).toContain("{!");
 
-        // Give "suc ?" — Agda returns a bare ? which must be expanded
+        // Give "suc ?" -- Agda returns a bare ? which must be expanded
         await h.give(goalsBefore[0].id, "suc ?");
 
         // The document should contain {!  !}, NOT a bare ?
@@ -275,7 +275,7 @@ for (const { version, binaryPath } of agdaBinaries) {
 }
 
 // ---------------------------------------------------------------------------
-// Part 4: Goal offset after give — stale offsets handled by forceScan
+// Part 4: Goal offset after give -- stale offsets handled by forceScan
 //
 // After giving goal ?0, Agda's InteractionPoints offsets refer to the
 // pre-give document. The harness (like the real extension) uses forceScan
@@ -284,7 +284,7 @@ for (const { version, binaryPath } of agdaBinaries) {
 // ---------------------------------------------------------------------------
 
 for (const { version, binaryPath } of agdaBinaries) {
-  describe(`Goal offset after give (harness) — Agda v${version}`, () => {
+  describe(`Goal offset after give (harness) -- Agda v${version}`, () => {
     const fixtureContent = fs.readFileSync(
       path.resolve(__dirname, "fixtures", "GiveStaleOffset.agda"),
       "utf-8",
@@ -338,7 +338,7 @@ for (const { version, binaryPath } of agdaBinaries) {
 // ---------------------------------------------------------------------------
 
 for (const { version, binaryPath } of agdaBinaries) {
-  describe(`Cursor at goal delimiter after give — Agda v${version}`, () => {
+  describe(`Cursor at goal delimiter after give -- Agda v${version}`, () => {
     const fixtureContent = fs.readFileSync(
       path.resolve(__dirname, "fixtures", "GiveStaleOffset.agda"),
       "utf-8",
@@ -377,7 +377,7 @@ for (const { version, binaryPath } of agdaBinaries) {
 //
 // When Agda returns { paren: true/false } for a give, the replacement is
 // built from the goal content in the document. Any bare ? in the content
-// must be expanded to {!  !} — otherwise the user gets a bare ? that
+// must be expanded to {!  !} -- otherwise the user gets a bare ? that
 // isn't a goal marker. This matters for the give → undo → reload → give
 // cycle: the ? must be expanded each time.
 //
@@ -488,7 +488,7 @@ describe("Paren give expands ? in goal content", () => {
 // After give, the old goal is replaced and new goals are created by
 // updateGoals (forceScan). When the user undoes, the text reverts but
 // Agda's state is stale. The extension must NOT preserve a goal at the
-// old position — otherwise the user can issue a give with a stale goal
+// old position -- otherwise the user can issue a give with a stale goal
 // ID, causing Agda to return a different paren flag.
 //
 // In Emacs agda2-mode, the goal overlay is destroyed during give and not
@@ -560,7 +560,7 @@ describe("Give then undo removes goal", () => {
    * The fix: undo collation. Before undo, call beginUndoCollation (which
    * snapshots the pre-undo text). During undo, skip goal adjustForEdits.
    * After undo, call endUndoCollation which computes a single merged
-   * change and processes it through adjustForEdits — correctly removing
+   * change and processes it through adjustForEdits -- correctly removing
    * goals whose boundaries were crossed.
    *
    * @param undoSteps  Array of {range, text} pairs, each fired as a
@@ -576,7 +576,7 @@ describe("Give then undo removes goal", () => {
     const uri = editor.document.uri.toString();
     const preUndoText = editor.document.getText();
 
-    // Begin undo collation — this snapshots pre-undo text
+    // Begin undo collation -- this snapshots pre-undo text
     goals.beginUndoCollation(uri, preUndoText);
 
     // Apply each undo step as a separate event, just like VS Code does.
@@ -595,11 +595,11 @@ describe("Give then undo removes goal", () => {
     // Verify the document was fully restored
     expect(editor.document.getText()).toBe(preGiveText);
 
-    // End undo collation — computes merged change and processes it
+    // End undo collation -- computes merged change and processes it
     goals.endUndoCollation(uri, editor.document.getText());
   }
 
-  it("paren: false — no goal survives undo", async () => {
+  it("paren: false -- no goal survives undo", async () => {
     const { editor, goals, uri, preGiveText, postGiveText } = await setupAndGive(false);
 
     // After give, document is "foo = id {!  !}\n", goal 1 at the {!  !}
@@ -611,7 +611,7 @@ describe("Give then undo removes goal", () => {
     expect(editor.document.getText(goal1.range)).toBe("{!  !}");
 
     // Simulate undo as VS Code actually fires it: two separate events.
-    // Observed from real VS Code logs — the replace [0:6,0:16]->"id {!  !}"
+    // Observed from real VS Code logs -- the replace [0:6,0:16]->"id {!  !}"
     // was decomposed by VS Code into delete+insert, and undo reverses them
     // as two separate onDidChangeTextDocument events:
     //   Event 1: insert "id ?" inside the hole interior (undoes the delete)
@@ -646,7 +646,7 @@ describe("Give then undo removes goal", () => {
     expect(goalsAfterUndo.length).toBe(0);
   });
 
-  // The paren:true case has the same fundamental problem — VS Code fires
+  // The paren:true case has the same fundamental problem -- VS Code fires
   // 3 undo steps (one for each atomic edit in the decomposition), each
   // individually surviving adjustRangeContaining.  We don't test the exact
   // decomposition here since it depends on VS Code's diff algorithm, but

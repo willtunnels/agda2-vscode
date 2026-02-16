@@ -38,7 +38,7 @@ import { type AgdaVersion, V2_8, versionGte } from "../agda/version.js";
 import { agdaCpOffsetToUtf16, toAgdaOffset } from "./offsets.js";
 
 // ---------------------------------------------------------------------------
-// LinkedText — text with embedded clickable file locations
+// LinkedText -- text with embedded clickable file locations
 // ---------------------------------------------------------------------------
 //
 // Represents a string that may contain file:line,col locations. Each location
@@ -46,7 +46,7 @@ import { agdaCpOffsetToUtf16, toAgdaOffset } from "./offsets.js";
 // UTF-16. The info panel renders links from the structured data (no re-parsing
 // needed).  linkedTextToString extracts plain text for non-clickable contexts.
 
-/** A segment of linked text — either plain text or a clickable location. */
+/** A segment of linked text -- either plain text or a clickable location. */
 export type LinkedTextSegment =
   | { kind: "text"; text: string }
   | {
@@ -108,7 +108,7 @@ export function displayLinkedText(lt: LinkedText, version: AgdaVersion): string 
 export const linkedTextToString = displayLinkedText;
 
 // ---------------------------------------------------------------------------
-// DisplayInfoVSCode — DisplayInfo with LinkedText for location-bearing fields
+// DisplayInfoVSCode -- DisplayInfo with LinkedText for location-bearing fields
 // ---------------------------------------------------------------------------
 
 export type DisplayInfoVSCode =
@@ -188,10 +188,10 @@ function getLineText(doc: vscode.TextDocument, agdaLine: number): string {
 
 /**
  * Parse all full-path locations in a text string and convert their Agda
- * code-point columns to VS Code UTF-16 columns. Returns a LinkedText — an
+ * code-point columns to VS Code UTF-16 columns. Returns a LinkedText -- an
  * array of plain-text and location-link segments.
  *
- * Goal-relative ranges like "1,1-4" are left as plain text — they are
+ * Goal-relative ranges like "1,1-4" are left as plain text -- they are
  * positions within the goal expression, not file positions.
  */
 export async function parseLocationsInString(
@@ -230,7 +230,7 @@ export async function parseLocationsInString(
 
     const doc = await getDoc(filepath);
     if (!doc) {
-      // Can't open the file — record the location but mark position as unknown
+      // Can't open the file -- record the location but mark position as unknown
       locations.push({
         start: match.index,
         end: match.index + match[0].length,

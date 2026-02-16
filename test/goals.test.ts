@@ -1,5 +1,5 @@
 /**
- * Unit tests for src/core/goals.ts — goal management, clearing on edit,
+ * Unit tests for src/core/goals.ts -- goal management, clearing on edit,
  * and the {! !} hole scanner.
  *
  * Uses the vscode mock in test/__mocks__/vscode.ts via the vitest alias.
@@ -97,7 +97,7 @@ describe("GoalManager", () => {
     });
 
     it("handles nested holes", () => {
-      // {! {!!} !} is a nested hole — only the outermost counts
+      // {! {!!} !} is a nested hole -- only the outermost counts
       const doc = mockDocument("file:///a.agda", "f = {! {!!} !}");
       gm.updateGoals(doc, [ip(0)], true);
       const goals = gm.getAll("file:///a.agda");
@@ -147,7 +147,7 @@ describe("GoalManager", () => {
     });
 
     it("limits goals to min(interactionPoints, holeRanges)", () => {
-      // More IPs than holes — only pairs up what it can
+      // More IPs than holes -- only pairs up what it can
       const doc = mockDocument("file:///a.agda", "f = {!!}");
       gm.updateGoals(doc, [ip(0), ip(1), ip(2)], true);
       expect(gm.getAll("file:///a.agda")).toHaveLength(1);
@@ -206,7 +206,7 @@ describe("GoalManager", () => {
     });
 
     it("deeply nested holes produce one outer range", () => {
-      // {! {! {!!} !} !} — three nesting levels, one outermost hole
+      // {! {! {!!} !} !} -- three nesting levels, one outermost hole
       const doc = mockDocument("file:///a.agda", "f = {! {! {!!} !} !}");
       gm.updateGoals(doc, [ip(0)], true);
       const goals = gm.getAll("file:///a.agda");
@@ -246,7 +246,7 @@ describe("GoalManager", () => {
     });
 
     it("{-! is not treated as a block comment opener", () => {
-      // Agda uses {-! for pragmas — should not start a comment
+      // Agda uses {-! for pragmas -- should not start a comment
       // The code checks for {- followed by non-! to avoid this
       const doc = mockDocument("file:///a.agda", "{-! BUILTIN !-}\nf = {!!}");
       gm.updateGoals(doc, [ip(0)], true);
@@ -299,7 +299,7 @@ describe("GoalManager", () => {
     });
 
     it("string literal inside a hole is not special", () => {
-      // Inside a hole, strings are not parsed — everything is literal until !}
+      // Inside a hole, strings are not parsed -- everything is literal until !}
       const doc = mockDocument("file:///a.agda", '{! "hello" !}');
       gm.updateGoals(doc, [ip(0)], true);
       const goals = gm.getAll("file:///a.agda");
@@ -321,7 +321,7 @@ describe("GoalManager", () => {
       expect(gm.getAll("file:///a.agda")).toHaveLength(0);
     });
 
-    it("is idempotent — second call is a no-op", () => {
+    it("is idempotent -- second call is a no-op", () => {
       const doc = mockDocument("file:///a.agda", "f = {!!}");
       gm.updateGoals(doc, [ip(0)], true);
 
@@ -404,11 +404,11 @@ describe("GoalManager", () => {
     }
 
     it("typing inside a goal preserves the goal (range grows)", () => {
-      // "f = {!!}" — goal at (0,4)-(0,8)
+      // "f = {!!}" -- goal at (0,4)-(0,8)
       const doc = mockDocument("file:///a.agda", "f = {!!}");
       gm.updateGoals(doc, [ip(0)], true);
 
-      // Type "zero" at position (0,6) — inside the goal: {!zero!}
+      // Type "zero" at position (0,6) -- inside the goal: {!zero!}
       // Edit: replace (0,6)-(0,6) with "zero"
       gm.adjustForEdits("file:///a.agda", [change(0, 6, 0, 6, "zero")]);
 
@@ -418,7 +418,7 @@ describe("GoalManager", () => {
     });
 
     it("typing before a goal shifts it right", () => {
-      // "f = {!!}" — goal at (0,4)-(0,8)
+      // "f = {!!}" -- goal at (0,4)-(0,8)
       const doc = mockDocument("file:///a.agda", "f = {!!}");
       gm.updateGoals(doc, [ip(0)], true);
 
@@ -432,7 +432,7 @@ describe("GoalManager", () => {
     });
 
     it("typing after a goal leaves it unchanged", () => {
-      // "f = {!!}" — goal at (0,4)-(0,8)
+      // "f = {!!}" -- goal at (0,4)-(0,8)
       const doc = mockDocument("file:///a.agda", "f = {!!}");
       gm.updateGoals(doc, [ip(0)], true);
 
@@ -446,7 +446,7 @@ describe("GoalManager", () => {
     });
 
     it("deleting a goal removes it but preserves others", () => {
-      // "f = {!!}\ng = {!!}" — two goals
+      // "f = {!!}\ng = {!!}" -- two goals
       const doc = mockDocument("file:///a.agda", "f = {!!}\ng = {!!}");
       gm.updateGoals(doc, [ip(0), ip(1)], true);
       expect(gm.getAll("file:///a.agda")).toHaveLength(2);
@@ -460,7 +460,7 @@ describe("GoalManager", () => {
     });
 
     it("inserting a newline before a goal shifts it down", () => {
-      // "f = {!!}" — goal at (0,4)-(0,8)
+      // "f = {!!}" -- goal at (0,4)-(0,8)
       const doc = mockDocument("file:///a.agda", "f = {!!}");
       gm.updateGoals(doc, [ip(0)], true);
 
@@ -490,7 +490,7 @@ describe("GoalManager", () => {
     });
 
     it("deleting opening ! from {!!} removes the goal", () => {
-      // "f = {!!}" — goal at (0,4)-(0,8)
+      // "f = {!!}" -- goal at (0,4)-(0,8)
       const doc = mockDocument("file:///a.agda", "f = {!!}");
       gm.updateGoals(doc, [ip(0)], true);
 
@@ -501,7 +501,7 @@ describe("GoalManager", () => {
     });
 
     it("deleting closing ! from {!!} removes the goal", () => {
-      // "f = {!!}" — goal at (0,4)-(0,8)
+      // "f = {!!}" -- goal at (0,4)-(0,8)
       const doc = mockDocument("file:///a.agda", "f = {!!}");
       gm.updateGoals(doc, [ip(0)], true);
 
@@ -512,7 +512,7 @@ describe("GoalManager", () => {
     });
 
     it("deleting ! from spaced {!  !} removes the goal", () => {
-      // "f = {!  !}" — goal at (0,4)-(0,10)
+      // "f = {!  !}" -- goal at (0,4)-(0,10)
       const doc = mockDocument("file:///a.agda", "f = {!  !}");
       gm.updateGoals(doc, [ip(0)], true);
 
@@ -527,7 +527,7 @@ describe("GoalManager", () => {
       const doc = mockDocument("file:///a.agda", "f = {!!}");
       gm.updateGoals(doc, [ip(0)], true);
 
-      // Replace (0,4)-(0,8) with "zero" — entire goal range
+      // Replace (0,4)-(0,8) with "zero" -- entire goal range
       gm.adjustForEdits("file:///a.agda", [change(0, 4, 0, 8, "zero")]);
 
       expect(gm.getAll("file:///a.agda")).toHaveLength(0);

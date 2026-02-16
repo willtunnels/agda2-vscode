@@ -84,7 +84,7 @@ const agdaBinaries = inject("agdaBinaries");
 const fixturePath = path.join(__dirname, "fixtures", "Unicode.agda");
 
 for (const { version, binaryPath } of agdaBinaries) {
-  describe(`Agda offset system — v${version}`, () => {
+  describe(`Agda offset system -- v${version}`, () => {
     it("code-point offsets correctly extract known identifiers", async () => {
       const { entries, fileContent } = await loadAndCollectHighlighting(binaryPath, fixturePath);
 

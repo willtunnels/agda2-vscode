@@ -1,5 +1,5 @@
 // Pure offset conversion between Agda code-point offsets and UTF-16 code
-// unit offsets. No VSCode dependency — directly testable.
+// unit offsets. No VSCode dependency -- directly testable.
 //
 // Agda counts Unicode code points (one per character, regardless of how
 // many bytes or UTF-16 code units the character occupies). VSCode/JavaScript
@@ -19,7 +19,7 @@
 
 declare const agdaOffsetBrand: unique symbol;
 
-/** A 1-based Agda code-point offset. Opaque — not assignable to/from number. */
+/** A 1-based Agda code-point offset. Opaque -- not assignable to/from number. */
 export type AgdaOffset = { readonly [agdaOffsetBrand]: true };
 
 /** Wrap a raw number as an AgdaOffset (use at JSON parsing boundaries). */

@@ -106,7 +106,7 @@ describe("AbbreviationRewriter (core)", () => {
 
     // The abbreviation is still tracked but internally marked as finished
     // (the rewriter's _finishedAbbreviations set). Verify by triggering
-    // replacement — it should replace and remove from tracking.
+    // replacement -- it should replace and remove from tracking.
     const after = [...rewriter.getTrackedAbbreviations()];
     expect(after.length).toBe(1);
     expect(after[0].abbreviation).toBe("to");
@@ -127,12 +127,12 @@ describe("AbbreviationRewriter (core)", () => {
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     expect(rewriter.getTrackedAbbreviations().size).toBe(1);
 
-    // Type " " (space) — should finalize immediately
+    // Type " " (space) -- should finalize immediately
     rewriter.changeInput([{ range: new Range(1, 0), newText: " " }]);
     await rewriter.flushPendingOps();
     await rewriter.triggerAbbreviationReplacement();
 
-    // Abbreviation text is "" (empty) — no match, so forceReplace produces
+    // Abbreviation text is "" (empty) -- no match, so forceReplace produces
     // no replacement.  The abbreviation should be removed from tracking.
     expect(rewriter.getTrackedAbbreviations().size).toBe(0);
     // Document should be unchanged: "\ "
@@ -270,7 +270,7 @@ describe("Cycling", () => {
     expect(tracked[0].isReplaced).toBe(true);
     expect(tracked[0].isCycleable).toBe(true);
 
-    // Tab cycles forward — cursor at offset 0 (inside the replaced symbol)
+    // Tab cycles forward -- cursor at offset 0 (inside the replaced symbol)
     source.selections = [new Range(0, 0)];
     await rewriter.cycleAbbreviations(1);
     expect(source.text).toBe("B");
@@ -334,7 +334,7 @@ describe("Cycling", () => {
     await rewriter.cycleAbbreviations(1);
     expect(source.text).toBe("B xyz");
 
-    // Cursor moves away — should finalize (remove tracking, keep B)
+    // Cursor moves away -- should finalize (remove tracking, keep B)
     await rewriter.changeSelections([new Range(5, 0)]);
     expect(source.text).toBe("B xyz");
     expect(rewriter.getTrackedAbbreviations().size).toBe(0);
@@ -352,7 +352,7 @@ describe("Cycling", () => {
     await rewriter.triggerAbbreviationReplacement();
     expect(source.text).toBe("→ xyz");
 
-    // Cursor moves away — finalize
+    // Cursor moves away -- finalize
     await rewriter.changeSelections([new Range(5, 0)]);
     expect(source.text).toBe("→ xyz");
     expect(rewriter.getTrackedAbbreviations().size).toBe(0);
@@ -384,7 +384,7 @@ describe("Cycling", () => {
     expect(tracked[0].isReplaced).toBe(true);
     expect(tracked[0].abbreviation).toBe("t");
 
-    // Now type "o" — document becomes "T1o", then extend should replace with →
+    // Now type "o" -- document becomes "T1o", then extend should replace with →
     source.text = "T1o";
     rewriter.changeInput([{ range: new Range(2, 0), newText: "o" }]);
     await rewriter.flushPendingOps();
@@ -414,7 +414,7 @@ describe("Cycling", () => {
     await rewriter.triggerAbbreviationReplacement();
     expect(source.text).toBe("A1");
 
-    // Type "b" — "ab" is a valid prefix (abc exists) but not a complete abbreviation
+    // Type "b" -- "ab" is a valid prefix (abc exists) but not a complete abbreviation
     source.text = "A1b";
     rewriter.changeInput([{ range: new Range(2, 0), newText: "b" }]);
     await rewriter.flushPendingOps();
@@ -442,12 +442,12 @@ describe("Cycling", () => {
     await rewriter.triggerAbbreviationReplacement();
     expect(source.text).toBe("X1");
 
-    // Type " " — no abbreviation starts with "x "
+    // Type " " -- no abbreviation starts with "x "
     source.text = "X1 ";
     rewriter.changeInput([{ range: new Range(2, 0), newText: " " }]);
     await rewriter.flushPendingOps();
 
-    // Should finalize — tracking removed, text stays as "X1 "
+    // Should finalize -- tracking removed, text stays as "X1 "
     expect(source.text).toBe("X1 ");
     expect(rewriter.getTrackedAbbreviations().size).toBe(0);
   });
@@ -479,7 +479,7 @@ describe("Cycling", () => {
     expect(tracked[0].isReplaced).toBe(true);
     expect(tracked[0].abbreviation).toBe("top");
 
-    // Backspace deletes ⊤ — VS Code removes the character, we get a deletion change
+    // Backspace deletes ⊤ -- VS Code removes the character, we get a deletion change
     source.text = "";
     rewriter.changeInput([{ range: new Range(0, 1), newText: "" }]);
     await rewriter.flushPendingOps();
@@ -639,7 +639,7 @@ describe("Cycling", () => {
   it("flushPendingOps serializes extend so fast follow-up chars are not lost", async () => {
     // This test verifies that if we call flushPendingOps between changeInput
     // calls (as the VS Code layer's drainQueue does), extend completes before
-    // the next event is processed — preventing the fast-typing race.
+    // the next event is processed -- preventing the fast-typing race.
     const config = makeConfig({
       customTranslations: {
         t: ["T1", "T2"],
@@ -681,7 +681,7 @@ describe("Cycling", () => {
   });
 
   it("without flushPendingOps, fast extend loses characters (demonstrates the bug)", async () => {
-    // This test shows what happens WITHOUT flushPendingOps — the old fire-
+    // This test shows what happens WITHOUT flushPendingOps -- the old fire-
     // and-forget pattern.  The second char processes against stale state.
     const config = makeConfig({
       customTranslations: {
@@ -752,7 +752,7 @@ describe("Cycling", () => {
     await rewriter.flushPendingOps();
     await rewriter.triggerAbbreviationReplacement();
 
-    // Should finalize — B stays, tracking removed
+    // Should finalize -- B stays, tracking removed
     expect(source.text).toBe("Bx");
     expect(rewriter.getTrackedAbbreviations().size).toBe(0);
   });
@@ -935,7 +935,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("→   →");
 
     // Backspace at BOTH cursors simultaneously (VS Code batches them).
-    // The deletion at offset 4 is "after" abbr1 — without the fix,
+    // The deletion at offset 4 is "after" abbr1 -- without the fix,
     // it would kill abbr1.
     source.text = "   ";
     rewriter.changeInput([
@@ -1029,7 +1029,7 @@ describe("Cycling", () => {
     expect(tracked[0].isReplaced).toBe(true);
     expect(tracked[0].abbreviation).toBe("t");
 
-    // Now type "o" — should extend to "to" → →
+    // Now type "o" -- should extend to "to" → →
     source.text = "◂o";
     rewriter.changeInput([{ range: new Range(1, 0), newText: "o" }]);
     await rewriter.flushPendingOps();
@@ -1045,13 +1045,13 @@ describe("Cycling", () => {
     // Reproduces the VS Code event pattern that caused the stale-selection bug.
     //
     // When the user types "t" after "\", VS Code enqueues:
-    //   1. change(@1+0→"t") — the keystroke
-    //   2. selection(@2+0)  — cursor after "t" (pre-replacement offset)
+    //   1. change(@1+0→"t") -- the keystroke
+    //   2. selection(@2+0)  -- cursor after "t" (pre-replacement offset)
     //
     // Processing event 1 triggers eager replacement: \t (2 chars) → T1.
     // The abbreviation is now at Range(0, 2) in replaced mode.
     //
-    // Processing event 2: cursor at offset 2 — which is RIGHT AFTER T1.
+    // Processing event 2: cursor at offset 2 -- which is RIGHT AFTER T1.
     // With the zero-length containsRange quirk, Range(0,2).containsRange(Range(2,0))
     // → 0 <= 2 && 1 <= 1 → true.  So this case happens to work.
     //
@@ -1064,7 +1064,7 @@ describe("Cycling", () => {
     //   selection: @56+0 → changeSel → tracked=[]
     const config = makeConfig({
       customTranslations: {
-        t: ["X"], // 1-char symbol — replacement shrinks \t from 2 to 1 char
+        t: ["X"], // 1-char symbol -- replacement shrinks \t from 2 to 1 char
         to: ["→"],
       },
     });
@@ -1099,7 +1099,7 @@ describe("Cycling", () => {
     // the abbreviation alive:
     tracked = [...rewriter.getTrackedAbbreviations()];
     // With stale offset 2 reaching the engine, abbreviation IS killed.
-    // This test documents the engine-level behavior — the real fix is in the
+    // This test documents the engine-level behavior -- the real fix is in the
     // VS Code layer (reading live selections instead of enqueued ones).
     // If we wanted the engine to tolerate this, we'd need to change containsRange.
     // For now, we just verify the engine's behavior is well-defined.
@@ -1161,7 +1161,7 @@ describe("Cycling", () => {
     await rewriter.triggerAbbreviationReplacement();
     expect(source.text).toBe("T1 xyz");
 
-    // Cursor at offset 6 — far from the symbol
+    // Cursor at offset 6 -- far from the symbol
     await rewriter.changeSelections([new Range(6, 0)]);
 
     // Abbreviation should be finalized
@@ -1269,7 +1269,7 @@ describe("Cycling", () => {
     await rewriter.triggerAbbreviationReplacement();
     expect(source.text).toBe("T1"); // "t" starts at default index 0
 
-    // Extend with "o" — "to" has remembered index 1, so should show ⇒
+    // Extend with "o" -- "to" has remembered index 1, so should show ⇒
     source.text = "T1o";
     rewriter.changeInput([{ range: new Range(2, 0), newText: "o" }]);
     await rewriter.flushPendingOps();
@@ -1303,7 +1303,7 @@ describe("Cycling", () => {
     await rewriter.triggerAbbreviationReplacement();
     expect(source.text).toBe("→");
 
-    // Backspace — delete the symbol, shortening "to" → "t"
+    // Backspace -- delete the symbol, shortening "to" → "t"
     source.text = "";
     rewriter.changeInput([{ range: new Range(0, 1), newText: "" }]);
     await rewriter.flushPendingOps();
@@ -1365,7 +1365,7 @@ describe("Cycling", () => {
     await rewriter.triggerAbbreviationReplacement();
     expect(source.text).toBe("A");
 
-    // Tab — should cycle to next symbol
+    // Tab -- should cycle to next symbol
     source.selections = [new Range(1, 0)]; // cursor inside abbreviation
     await rewriter.cycleAbbreviations(1);
     expect(source.text).toBe("B");

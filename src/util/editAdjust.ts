@@ -3,8 +3,8 @@
 // document edits.
 //
 // Two modes:
-// - adjust*: for arbitrary user edits — intersecting items are removed.
-// - expand*: for known ? → {!  !} goal marker expansion — intersecting items
+// - adjust*: for arbitrary user edits -- intersecting items are removed.
+// - expand*: for known ? → {!  !} goal marker expansion -- intersecting items
 //   are preserved and grown.
 
 import * as vscode from "vscode";
@@ -77,7 +77,7 @@ function shiftPosition(
 }
 
 // ---------------------------------------------------------------------------
-// Range adjustment (for arbitrary edits — removes intersecting ranges)
+// Range adjustment (for arbitrary edits -- removes intersecting ranges)
 // ---------------------------------------------------------------------------
 
 /**
@@ -85,12 +85,12 @@ function shiftPosition(
  * range intersects the edit and should be removed.
  */
 export function adjustRange(range: vscode.Range, edit: EditParams): vscode.Range | null {
-  // Entirely before edit — unchanged
+  // Entirely before edit -- unchanged
   if (range.end.isBeforeOrEqual(edit.editRange.start)) {
     return range;
   }
 
-  // Entirely after edit — shift
+  // Entirely after edit -- shift
   if (range.start.isAfterOrEqual(edit.editRange.end)) {
     return new vscode.Range(
       shiftPosition(range.start, edit.editRange.end, edit.lineDelta, edit.newEndChar),
@@ -98,19 +98,19 @@ export function adjustRange(range: vscode.Range, edit: EditParams): vscode.Range
     );
   }
 
-  // Intersects — remove
+  // Intersects -- remove
   return null;
 }
 
 // ---------------------------------------------------------------------------
-// Range adjustment for containers (goals) — grows when edit is inside
+// Range adjustment for containers (goals) -- grows when edit is inside
 // ---------------------------------------------------------------------------
 
 /**
  * Adjust a container range (e.g. a goal `{! !}`) for a single edit.
  *
  * Unlike adjustRange (which removes any intersecting range), this function
- * **grows** the range when the edit is entirely within the interior — the
+ * **grows** the range when the edit is entirely within the interior -- the
  * expected behavior when the user types inside a {! !} goal.
  *
  * @param delimiterWidth The number of characters at each end of the range
@@ -125,12 +125,12 @@ export function adjustRangeContaining(
   edit: EditParams,
   delimiterWidth = 0,
 ): vscode.Range | null {
-  // Entirely before edit — unchanged
+  // Entirely before edit -- unchanged
   if (range.end.isBeforeOrEqual(edit.editRange.start)) {
     return range;
   }
 
-  // Entirely after edit — shift
+  // Entirely after edit -- shift
   if (range.start.isAfterOrEqual(edit.editRange.end)) {
     return new vscode.Range(
       shiftPosition(range.start, edit.editRange.end, edit.lineDelta, edit.newEndChar),
@@ -138,7 +138,7 @@ export function adjustRangeContaining(
     );
   }
 
-  // Edit strictly inside the interior (between delimiters) — grow the range.
+  // Edit strictly inside the interior (between delimiters) -- grow the range.
   // The interior starts `delimiterWidth` characters after range.start
   // and ends `delimiterWidth` characters before range.end.
   const interiorStart = delimiterWidth > 0 ? range.start.translate(0, delimiterWidth) : range.start;
@@ -153,12 +153,12 @@ export function adjustRangeContaining(
     );
   }
 
-  // Partial overlap (edit crosses a boundary or touches a delimiter) — remove
+  // Partial overlap (edit crosses a boundary or touches a delimiter) -- remove
   return null;
 }
 
 // ---------------------------------------------------------------------------
-// Range expansion (for ? → {!  !} — preserves and grows intersecting ranges)
+// Range expansion (for ? → {!  !} -- preserves and grows intersecting ranges)
 // ---------------------------------------------------------------------------
 
 /**
@@ -252,7 +252,7 @@ export function computeSingleChange(
 
 /**
  * Check for unmatched `{!` in the common prefix and `!}` in the common
- * suffix. If both exist, the minimal diff is inside a hole — shrink the
+ * suffix. If both exist, the minimal diff is inside a hole -- shrink the
  * prefix to before the outermost unmatched `{!`.
  *
  * Uses the before-text (but the prefix/suffix are identical in both texts).
@@ -290,7 +290,7 @@ function shrinkPrefixForHoles(text: string, prefixLen: number, suffixLen: number
 
   if (closeDepth <= 0) return prefixLen;
 
-  // Both sides have unmatched delimiters — shrink prefix to before the {!
+  // Both sides have unmatched delimiters -- shrink prefix to before the {!
   return firstUnmatchedOpen;
 }
 
@@ -322,7 +322,7 @@ function offsetToPosition(text: string, offset: number): vscode.Position {
  * Deleted content is unrecoverable from the post-text alone, so we fill
  * deleted regions with null-byte placeholders of the correct length. This
  * is sufficient because the result is only used by computeSingleChange,
- * which finds the common prefix/suffix between pre and post — unchanged
+ * which finds the common prefix/suffix between pre and post -- unchanged
  * regions outside the edits match correctly, and the placeholder content
  * falls within the "changed middle" where exact content doesn't matter.
  */
@@ -349,7 +349,7 @@ export function reconstructPreText(
     preCursor += gapLength;
 
     // The change: in pre-doc, rangeLength chars; in post-doc, text.length chars.
-    // Fill with null bytes as placeholder — these won't match post-text,
+    // Fill with null bytes as placeholder -- these won't match post-text,
     // so computeSingleChange will include this region in the "changed middle".
     result += "\0".repeat(c.rangeLength);
     preCursor += c.rangeLength;

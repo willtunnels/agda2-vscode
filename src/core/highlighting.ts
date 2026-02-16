@@ -3,11 +3,11 @@
 // Stores highlighting entries from Agda (each with a range, atoms, and optional
 // definition site) and derives two outputs from them:
 //
-// 1. Decorations (backgrounds, underlines, font styles) — pushed to VS Code
+// 1. Decorations (backgrounds, underlines, font styles) -- pushed to VS Code
 //    via setDecorations. These cover visual properties that semantic tokens
 //    cannot express.
 //
-// 2. Semantic tokens (foreground text color) — pulled by VS Code via the
+// 2. Semantic tokens (foreground text color) -- pulled by VS Code via the
 //    DocumentSemanticTokensProvider API. The user's color theme controls the
 //    actual colors based on token types like "function", "variable", "type".
 //
@@ -82,10 +82,10 @@ const ATOM_TO_TOKEN_TYPE: Partial<Record<string, (typeof TOKEN_TYPES)[number]>> 
   markup: "comment",
 };
 
-// --- Decoration styles (backgrounds, underlines, font styles — no foreground colors) ---
+// --- Decoration styles (backgrounds, underlines, font styles -- no foreground colors) ---
 
 const DECORATION_STYLES: Record<string, vscode.DecorationRenderOptions> = {
-  // "hole" is intentionally omitted — GoalManager owns hole styling so it
+  // "hole" is intentionally omitted -- GoalManager owns hole styling so it
   // persists through edits inside the goal.
 
   unsolvedmeta: {
@@ -261,7 +261,7 @@ export class HighlightingManager
       }
     }
 
-    // Apply — set empty ranges for unused types to clear stale decorations
+    // Apply -- set empty ranges for unused types to clear stale decorations
     for (const [atom, decorationType] of this.decorationTypes) {
       editor.setDecorations(decorationType, groups.get(atom) ?? []);
     }
@@ -282,7 +282,7 @@ export class HighlightingManager
   }
 
   // ---------------------------------------------------------------------------
-  // Semantic tokens (pull-based — VS Code calls this)
+  // Semantic tokens (pull-based -- VS Code calls this)
   // ---------------------------------------------------------------------------
 
   provideDocumentSemanticTokens(document: vscode.TextDocument): vscode.SemanticTokens {
@@ -373,7 +373,7 @@ export class HighlightingManager
 
   /**
    * Clear token-based highlighting only.
-   * For now this clears everything — a more precise implementation would
+   * For now this clears everything -- a more precise implementation would
    * track which entries came from token-based vs non-token-based sources.
    */
   clearTokenBased(editor: vscode.TextEditor): void {
@@ -440,7 +440,7 @@ export class HighlightingManager
     }
 
     this._onDidChangeSemanticTokens.fire();
-    // Decorations are push-based — re-apply to keep them in sync with the
+    // Decorations are push-based -- re-apply to keep them in sync with the
     // adjusted entries. (Semantic tokens are re-pulled by VS Code automatically
     // after the event above.)
     this.reapplyToVisibleEditors(uri);

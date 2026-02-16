@@ -3,7 +3,7 @@
  *
  * Combines a MockDocumentEditor + a real Agda process + a real GoalManager +
  * the REAL processBatchedResponses to test the full give/load flow end-to-end
- * — document mutations, goal tracking, and decoration placement — without a
+ * -- document mutations, goal tracking, and decoration placement -- without a
  * running VS Code instance.
  *
  * Unlike the previous version, this does NOT reimplement any logic from

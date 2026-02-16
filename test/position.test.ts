@@ -17,11 +17,11 @@ const ao = toAgdaOffset;
 const raw = fromAgdaOffset;
 
 // Test strings:
-//   "abc"       — pure ASCII, all offsets equal
-//   "aℕb"       — BMP char ℕ (U+2115): 1 code point, 1 UTF-16 code unit
-//   "a𝕄b"       — supplementary char 𝕄 (U+1D544): 1 code point, 2 UTF-16 code units
-//   "𝕄α"        — supplementary then BMP: offsets diverge after 𝕄
-//   "a𝕄𝕄b"      — two supplementary chars: divergence accumulates
+//   "abc"       -- pure ASCII, all offsets equal
+//   "aℕb"       -- BMP char ℕ (U+2115): 1 code point, 1 UTF-16 code unit
+//   "a𝕄b"       -- supplementary char 𝕄 (U+1D544): 1 code point, 2 UTF-16 code units
+//   "𝕄α"        -- supplementary then BMP: offsets diverge after 𝕄
+//   "a𝕄𝕄b"      -- two supplementary chars: divergence accumulates
 
 describe("agdaCpOffsetToUtf16", () => {
   it("ASCII: code-point and UTF-16 offsets are the same", () => {
@@ -40,12 +40,12 @@ describe("agdaCpOffsetToUtf16", () => {
 
   it("supplementary plane char: UTF-16 offset is +1 after it", () => {
     const text = "a𝕄b";
-    // 𝕄 is U+1D544 — 1 code point, 2 UTF-16 code units (surrogate pair)
+    // 𝕄 is U+1D544 -- 1 code point, 2 UTF-16 code units (surrogate pair)
     //           cp:  1 2 3    (3 code points)
     //           u16: 0 1 3    ('a'=0, '𝕄'=1..2, 'b'=3)
     expect(agdaCpOffsetToUtf16(text, ao(1))).toBe(0); // 'a'
     expect(agdaCpOffsetToUtf16(text, ao(2))).toBe(1); // '𝕄'
-    expect(agdaCpOffsetToUtf16(text, ao(3))).toBe(3); // 'b' — shifted by 1
+    expect(agdaCpOffsetToUtf16(text, ao(3))).toBe(3); // 'b' -- shifted by 1
   });
 
   it("two supplementary chars: offset divergence accumulates", () => {
@@ -55,7 +55,7 @@ describe("agdaCpOffsetToUtf16", () => {
     expect(agdaCpOffsetToUtf16(text, ao(1))).toBe(0); // 'a'
     expect(agdaCpOffsetToUtf16(text, ao(2))).toBe(1); // first '𝕄'
     expect(agdaCpOffsetToUtf16(text, ao(3))).toBe(3); // second '𝕄'
-    expect(agdaCpOffsetToUtf16(text, ao(4))).toBe(5); // 'b' — shifted by 2
+    expect(agdaCpOffsetToUtf16(text, ao(4))).toBe(5); // 'b' -- shifted by 2
   });
 
   it("supplementary then BMP: α after 𝕄", () => {

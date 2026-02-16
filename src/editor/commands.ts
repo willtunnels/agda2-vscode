@@ -401,7 +401,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     filepath: string,
   ): Promise<void> {
     // Replace the entire line(s) containing the goal with the new clauses,
-    // then reload — matching Emacs agda2-make-case-action.
+    // then reload -- matching Emacs agda2-make-case-action.
     const cursor = editor.selection.active;
     const caseLine = cursor.line;
     const line = editor.document.lineAt(caseLine);
@@ -942,7 +942,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
       } else {
         items.push({
           label: `$(warning) ${a.path}`,
-          description: `(from additionalPaths — ${a.reason})`,
+          description: `(from additionalPaths -- ${a.reason})`,
           broken: true,
         });
       }
@@ -1017,7 +1017,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
   // then collate all changes into one.
   //
   // We dispatch via executeCommand("type") rather than calling
-  // handleKeyEvent directly — this preserves VSCodeVim's full internal
+  // handleKeyEvent directly -- this preserves VSCodeVim's full internal
   // state management (including redo history). executeCommand does not
   // go through keybinding resolution, so our keybinding does not re-fire.
   //

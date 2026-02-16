@@ -14,7 +14,7 @@ describe("TrackedAbbreviation", () => {
     // Append "t" at offset 1 (end of abbreviation range)
     const result = ta.processChange(new Range(1, 0), "t");
     expect(result).toEqual({ kind: "appended", text: "t" });
-    // Abbreviation text is NOT updated — caller must call acceptAppend
+    // Abbreviation text is NOT updated -- caller must call acceptAppend
     expect(ta.abbreviation).toBe("");
 
     // Caller decides the append is valid and accepts it
@@ -28,7 +28,7 @@ describe("TrackedAbbreviation", () => {
     // Append " " at offset 3 (end of abbreviation range)
     const result = ta.processChange(new Range(3, 0), " ");
     expect(result).toEqual({ kind: "appended", text: " " });
-    // Abbreviation text unchanged — caller should NOT call acceptAppend
+    // Abbreviation text unchanged -- caller should NOT call acceptAppend
     expect(ta.abbreviation).toBe("to");
   });
 

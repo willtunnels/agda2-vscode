@@ -1,8 +1,10 @@
 # Architecture
 
+The purpose of this file is to bootstrap human and agent context with respect to this project.
+
 ## Overview
 
-This is a VSCode extension for interactive Agda development, targeting Agda >= 2.6.1. It communicates directly with a single long-lived `agda --interaction-json` process via stdin/stdout pipes — this is similar to `agda2-mode.el`, the Emacs agda2-mode, which communicates with `agda --interaction` (an S-expression based protocol).
+This is a VSCode extension for interactive Agda development, targeting Agda >= 2.6.1. It communicates directly with a single long-lived `agda --interaction-json` process via stdin/stdout pipes -- this is similar to `agda2-mode.el`, the Emacs agda2-mode, which communicates with `agda --interaction` (an S-expression based protocol).
 
 The Emacs agda2-mode and this extension are structurally parallel, except:
 
@@ -103,11 +105,11 @@ Each highlighting entry has a `[from, to]` range (1-based absolute character off
 
 #### Unified HighlightingManager
 
-`HighlightingManager` (`src/core/highlighting.ts`) is the single source of truth for all highlighting state. It stores `StoredEntry` objects per file URI — each with a `Range`, atoms, and optional `definitionSite` — and derives two outputs:
+`HighlightingManager` (`src/core/highlighting.ts`) is the single source of truth for all highlighting state. It stores `StoredEntry` objects per file URI -- each with a `Range`, atoms, and optional `definitionSite` -- and derives two outputs:
 
-1. **Semantic tokens (foreground colors)** — `HighlightingManager` implements `DocumentSemanticTokensProvider`. VS Code pulls tokens on demand; the manager maps Agda atoms to standard semantic token types so **all foreground text colors come from the user's theme**.
+1. **Semantic tokens (foreground colors)** -- `HighlightingManager` implements `DocumentSemanticTokensProvider`. VS Code pulls tokens on demand; the manager maps Agda atoms to standard semantic token types so **all foreground text colors come from the user's theme**.
 
-2. **Decorations (backgrounds, underlines, font styles)** — pushed to VS Code via `setDecorations`. These cover visual properties that semantic tokens cannot express, using `ThemeColor` references to custom color IDs defined in `contributes.colors`.
+2. **Decorations (backgrounds, underlines, font styles)** -- pushed to VS Code via `setDecorations`. These cover visual properties that semantic tokens cannot express, using `ThemeColor` references to custom color IDs defined in `contributes.colors`.
 
 This unified design means each highlighting entry is stored once and adjusted once when the document is edited, rather than maintaining two parallel data structures.
 
@@ -115,18 +117,18 @@ This unified design means each highlighting entry is stored once and adjusted on
 
 When the user edits the document, stored highlighting ranges must be adjusted to stay in sync. Two modes are supported (implemented in `src/util/editAdjust.ts`):
 
-- **`adjustForEdits`** — for arbitrary user edits: ranges that intersect the edited region are removed; ranges after the edit are shifted by the line/character delta.
-- **`expandForGoalMarkers`** — for the known `?` → `{!!}` expansion during load: intersecting ranges are preserved and grown rather than removed. `HighlightingManager` maintains a per-URI `pendingExpansions` map; `registerPendingExpansions(uri, ranges)` is called before the expansion edit, and `adjustForEdits` consumes matching entries to decide whether to grow or remove intersecting ranges.
+- **`adjustForEdits`** -- for arbitrary user edits: ranges that intersect the edited region are removed; ranges after the edit are shifted by the line/character delta.
+- **`expandForGoalMarkers`** -- for the known `?` → `{!!}` expansion during load: intersecting ranges are preserved and grown rather than removed. `HighlightingManager` maintains a per-URI `pendingExpansions` map; `registerPendingExpansions(uri, ranges)` is called before the expansion edit, and `adjustForEdits` consumes matching entries to decide whether to grow or remove intersecting ranges.
 
 ### Goals
 
-After `Cmd_load`, Agda responds with `InteractionPoints` — a list of `{id, range}` objects identifying each hole. `GoalManager` converts these Agda ranges to VSCode ranges and applies decorations (blue background + `?N` label). As a fallback for empty ranges, it scans the document for `{! !}` delimiters.
+After `Cmd_load`, Agda responds with `InteractionPoints` -- a list of `{id, range}` objects identifying each hole. `GoalManager` converts these Agda ranges to VSCode ranges and applies decorations (blue background + `?N` label). As a fallback for empty ranges, it scans the document for `{! !}` delimiters.
 
 ### Undo/redo collation
 
 When the user does give then undo, the goal decoration should disappear (matching Emacs, where the overlay is destroyed by give and not restored by undo). The problem: VS Code decomposes the undo into multiple atomic edits, and each individual edit looks like an interior-only change to `adjustRangeContaining`, so the goal survives.
 
-The fix is **undo collation** — collapse the multiple atomic edits into a single merged change, which crosses goal boundaries and causes `adjustRangeContaining` to remove the goal.
+The fix is **undo collation** -- collapse the multiple atomic edits into a single merged change, which crosses goal boundaries and causes `adjustRangeContaining` to remove the goal.
 
 **Computing the merged change:** `computeSingleChange(beforeText, afterText, holeAware)` in `editAdjust.ts` diffs the full document text before and after the undo using common prefix/suffix matching. It produces one `TextDocumentContentChangeEvent` spanning the entire changed region. Both undo paths pass `holeAware=true`, which prevents the minimal diff from hiding `{!`/`!}` delimiter crossings: if the common prefix contains an unmatched `{!` and the common suffix contains an unmatched `!}`, the prefix is shrunk to before the `{!` so the change region crosses the delimiter boundary. This is needed because a give that simplifies to `?` (expanded to `{!  !}`) produces identical delimiters in the post-give text, and the undo diff would otherwise be interior-only.
 
@@ -138,7 +140,7 @@ The extension intercepts `u` via a `contributes.keybinding` with `"when": "vim.a
 
 Redo (`Ctrl+R`) does **not** need interception: before we can redo edit X we must have undone X, so the undo collation already removed any goals whose boundaries X crosses. VSCodeVim handles redo through its own `Ctrl+R` keybinding (which is an explicit `contributes.keybinding` registered by VSCodeVim, not routed through the `type` override).
 
-The `agda.vimUndo` handler dispatches the `u` key back through VS Code's `type` command (`executeCommand("type", {text: "u"})`), which VSCodeVim overrides. This is exactly the path a normal `u` keypress takes (minus keybinding resolution), so VSCodeVim's undo pipeline runs through its normal task queue and state management — preserving redo history. `executeCommand` does not go through keybinding resolution, so our keybinding does not re-fire.
+The `agda.vimUndo` handler dispatches the `u` key back through VS Code's `type` command (`executeCommand("type", {text: "u"})`), which VSCodeVim overrides. This is exactly the path a normal `u` keypress takes (minus keybinding resolution), so VSCodeVim's undo pipeline runs through its normal task queue and state management -- preserving redo history. `executeCommand` does not go through keybinding resolution, so our keybinding does not re-fire.
 
 The handler wraps this dispatch with collation:
 
@@ -156,7 +158,7 @@ Native undo fires **one `onDidChangeTextDocument` event** with multiple `content
 
 1. The handler detects `reason === 1` (Undo) or `reason === 2` (Redo) with multiple changes.
 2. `reconstructPreText(postText, contentChanges)` rebuilds the pre-change text. Content changes have ranges in pre-document coordinates; unchanged regions are copied from the post-text, and deleted content (which we don't have) is filled with null-byte placeholders.
-3. `computeSingleChange(preText, postText)` diffs to get the merged change. Placeholders land inside the "changed middle" since they won't match the post-text — the boundaries are determined by the unchanged regions, which are correct.
+3. `computeSingleChange(preText, postText)` diffs to get the merged change. Placeholders land inside the "changed middle" since they won't match the post-text -- the boundaries are determined by the unchanged regions, which are correct.
 4. `goals.adjustForEdits` runs with the single merged change.
 
 ### Command queue
@@ -170,11 +172,11 @@ The queue uses a hybrid streaming/batched model:
 
 ## Info Panel
 
-The Info Panel (`src/editor/infoPanel.ts`) is a `WebviewPanel` that replaces notification toasts as the primary information display — equivalent to Emacs's `*Agda Information*` buffer.
+The Info Panel (`src/editor/infoPanel.ts`) is a `WebviewPanel` that replaces notification toasts as the primary information display -- equivalent to Emacs's `*Agda Information*` buffer.
 
 ### Design
 
-Unlike Lean 4's infoview (a React app communicating over bidirectional RPC), the Agda Info Panel uses plain HTML/CSS generated on the extension side and sent to the webview via `postMessage`. The webview sends messages back only for user interactions (clicking a file location link → `openFile`). This simple design is appropriate because Agda's protocol sends complete `DisplayInfo` JSON blobs — there are no server-side object references or interactive widgets.
+Unlike Lean 4's infoview (a React app communicating over bidirectional RPC), the Agda Info Panel uses plain HTML/CSS generated on the extension side and sent to the webview via `postMessage`. The webview sends messages back only for user interactions (clicking a file location link → `openFile`). This simple design is appropriate because Agda's protocol sends complete `DisplayInfo` JSON blobs -- there are no server-side object references or interactive widgets.
 
 ### What it displays
 
@@ -208,11 +210,11 @@ Rather than writing a custom Unicode input system, we adapted the abbreviation e
 - **`AbbreviationRewriter`**: Core state machine tracking active abbreviations, deciding when to replace
 - **`TrackedAbbreviation`**: Represents one in-progress abbreviation (its range, current text, matched symbols)
 
-The VS Code integration layer (`VSCodeAbbreviationRewriter`, `AbbreviationRewriterFeature`, `AbbreviationFeature`) adapts the engine to VS Code's APIs — listening to document changes and selection changes, applying edits, managing per-editor lifecycle.
+The VS Code integration layer (`VSCodeAbbreviationRewriter`, `AbbreviationRewriterFeature`, `AbbreviationFeature`) adapts the engine to VS Code's APIs -- listening to document changes and selection changes, applying edits, managing per-editor lifecycle.
 
 ### Re-entrant edit events and the `isApplyingEdit` guard
 
-When `workspace.applyEdit()` modifies the document, VS Code fires `onDidChangeTextDocument` **re-entrantly** — during the `await`, before the promise resolves. Without a guard, this re-entrant event feeds our own edit into `changeInput` → `processChange`, which kills tracked abbreviations before `enterReplacedState` / `updateRangeAfterCycleEdit` can run.
+When `workspace.applyEdit()` modifies the document, VS Code fires `onDidChangeTextDocument` **re-entrantly** -- during the `await`, before the promise resolves. Without a guard, this re-entrant event feeds our own edit into `changeInput` → `processChange`, which kills tracked abbreviations before `enterReplacedState` / `updateRangeAfterCycleEdit` can run.
 
 **The fix**: `VSCodeAbbreviationRewriter` sets `isApplyingEdit = true` before `await workspace.applyEdit()` and `false` after. The first `onDidChangeTextDocument` event during the flag is assumed to be the re-entrant notification for our own edit and is skipped. In VS Code Remote, `applyEdit` involves IPC and takes multiple event-loop turns, so any additional events that arrive during the flag (real user keystrokes) are buffered in `eventsBufferedDuringEdit` and replayed through the operation queue after the edit completes.
 
@@ -249,11 +251,11 @@ State transitions: `""` → `"leader"` → `"leader-m"` → (final key fires com
 
 ### Shared infrastructure
 
-Both styles share the same `universalArgCount`, `resetSequence()`, timeout (2 seconds), and Escape cancel. The states are kept separate (`leader-m-x` vs `cc-x`, `leader-m-u` vs `cc-u`) so the two styles don't bleed into each other — each style uses its own key modifiers (plain keys for Evil, `ctrl+key` for Ctrl+C) in sub-states.
+Both styles share the same `universalArgCount`, `resetSequence()`, timeout (2 seconds), and Escape cancel. The states are kept separate (`leader-m-x` vs `cc-x`, `leader-m-u` vs `cc-u`) so the two styles don't bleed into each other -- each style uses its own key modifiers (plain keys for Evil, `ctrl+key` for Ctrl+C) in sub-states.
 
 ## Version handling
 
-`AgdaVersion` (`src/agda/version.ts`) is an opaque branded type — like `AgdaOffset`, it prevents accidental misuse by making it non-assignable to/from `number[]`. Well-known constants `V2_7` and `V2_8` are used throughout the codebase for version-gated behavior:
+`AgdaVersion` (`src/agda/version.ts`) is an opaque branded type -- like `AgdaOffset`, it prevents accidental misuse by making it non-assignable to/from `number[]`. Well-known constants `V2_7` and `V2_8` are used throughout the codebase for version-gated behavior:
 
 - **Command builders** (`commands.ts`): `cmdAutoOne`/`cmdAutoAll` take different arguments for Agda < 2.7 vs >= 2.7. `cmdLoadNoMetas` (>= 2.8) takes the filepath in the inner command; `cmdNoMetas` (< 2.8) does not. `cmdBackendTop`/`cmdBackendHole` are >= 2.8 only.
 - **Location parsing** (`agdaLocation.ts`): Agda < 2.8 uses comma-separated positions (`file:10,5-15`); >= 2.8 uses dots (`file:10.5-15`).
@@ -266,9 +268,9 @@ The extension can discover and manage Agda installations (`src/agda/installation
 - **Download Agda** (`agda.downloadAgda`): Downloads pre-built Agda binaries from a hardcoded table of known GitHub release URLs for the current platform (linux/x64, macOS-arm64/x64, win64). Archives are cached in `globalStorage/archives/` and extracted to `globalStorage/bin/{tag}/`. Handles two archive layouts: v2.8.0+ (bare `agda` at root) and v2.7.0.1 (`Agda-*/bin/agda`). On macOS, removes the quarantine extended attribute.
 - **Switch Agda** (`agda.switchAgda`): Shows a QuickPick listing Agda installations from four sources (discovered in parallel) and updates the `agda.path` configuration:
   1. **Extension-managed** downloads in `globalStorage/bin/`
-  2. **User-configured** `agda.additionalPaths` — broken entries are shown with a warning icon and reason
-  3. **System PATH** — scans `$PATH` directories
-  4. **Well-known locations** — `~/.cabal/bin`, `~/.local/bin`, `~/.ghcup/bin`, `~/.nix-profile/bin`, Nix system profile, plus Homebrew paths on macOS and `%APPDATA%\cabal\bin` on Windows
+  2. **User-configured** `agda.additionalPaths` -- broken entries are shown with a warning icon and reason
+  3. **System PATH** -- scans `$PATH` directories
+  4. **Well-known locations** -- `~/.cabal/bin`, `~/.local/bin`, `~/.ghcup/bin`, `~/.nix-profile/bin`, Nix system profile, plus Homebrew paths on macOS and `%APPDATA%\cabal\bin` on Windows
 
 All discovery functions return normalized paths (symlinks resolved) to ensure correct deduplication across sources. The shared `probeAgda()` helper checks executability and runs `agda --version` to detect the version, returning a structured `ProbeResult` (success with version, or failure with reason).
 
@@ -276,7 +278,7 @@ All discovery functions return normalized paths (symlinks resolved) to ensure co
 
 ## Location parsing
 
-Agda error messages contain source locations like `file:10,5-15` or `file:10,5-12,3`. The `agdaLocation.ts` module parses these into structured `LinkedText` — an array of plain-text and location segments. This enables clickable file locations in the Info Panel.
+Agda error messages contain source locations like `file:10,5-15` or `file:10,5-12,3`. The `agdaLocation.ts` module parses these into structured `LinkedText` -- an array of plain-text and location segments. This enables clickable file locations in the Info Panel.
 
 Column numbers require conversion because Agda reports code-point offsets while VS Code uses UTF-16. The parser reads the referenced file's text to perform this conversion accurately. Goal-relative ranges (no filepath) are left as plain text since they refer to the current document's already-known goal ranges.
 
@@ -284,9 +286,9 @@ Column numbers require conversion because Agda reports code-point offsets while 
 
 Agda uses 1-based absolute code-point offsets for all positions. Two layers handle conversion:
 
-1. **`offsets.ts`** — pure functions with zero VS Code dependencies. `AgdaOffset` is a branded opaque type that prevents passing raw numbers to `document.positionAt()`. Handles supplementary-plane characters (U+10000+), where each code point maps to two UTF-16 code units.
+1. **`offsets.ts`** -- pure functions with zero VS Code dependencies. `AgdaOffset` is a branded opaque type that prevents passing raw numbers to `document.positionAt()`. Handles supplementary-plane characters (U+10000+), where each code point maps to two UTF-16 code units.
 
-2. **`position.ts`** — thin wrappers that accept a `TextDocument` and delegate to `offsets.ts`. Functions take an optional `text?: string` parameter to avoid repeated `document.getText()` calls in loops.
+2. **`position.ts`** -- thin wrappers that accept a `TextDocument` and delegate to `offsets.ts`. Functions take an optional `text?: string` parameter to avoid repeated `document.getText()` calls in loops.
 
 ## Configuration
 
@@ -296,7 +298,7 @@ Available settings: `agda.path` (binary), `agda.additionalPaths` (for Switch Agd
 
 ## TextMate grammar
 
-`syntaxes/agda.tmLanguage.json` provides a minimal TextMate grammar that scopes comments, block comments, and string literals. Its only purpose is to tell VS Code's bracket matcher to skip brackets inside these regions — without it, parentheses in `-- comment (with parens)` would be bracket-matched. All actual syntax coloring comes from Agda's semantic tokens.
+`syntaxes/agda.tmLanguage.json` provides a minimal TextMate grammar that scopes comments, block comments, and string literals. Its only purpose is to tell VS Code's bracket matcher to skip brackets inside these regions -- without it, parentheses in `-- comment (with parens)` would be bracket-matched. All actual syntax coloring comes from Agda's semantic tokens.
 
 The line comment rule uses a negative lookbehind to avoid matching `--` inside identifiers: `(?<![^\s(){}";@.])--.*$`. This is a double-negative ("not preceded by a non-delimiter") derived from Agda's lexer, where the delimiter characters that cannot appear in identifiers are whitespace, `(){}`, `"`, `;`, `@`, and `.`. Since Agda allows almost any Unicode character in identifiers (the `alexGetByte` function in the compiler maps non-ASCII printable characters to identifier-compatible bytes), enumerating delimiters is simpler than enumerating identifier characters.
 

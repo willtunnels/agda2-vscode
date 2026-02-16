@@ -12,7 +12,7 @@ export type CycleDirection = 1 | -1;
 
 /** Result of processing a document change against a tracked abbreviation. */
 export type ProcessChangeResult =
-  /** Change was elsewhere — no impact (range may have been shifted internally). */
+  /** Change was elsewhere -- no impact (range may have been shifted internally). */
   | { kind: "none" }
   /** Abbreviation should be removed from tracking (disruptive edit). */
   | { kind: "stop" }
@@ -30,9 +30,9 @@ export type ProcessChangeResult =
  * Represents an abbreviation tracked by the rewriter.
  *
  * Lifecycle states:
- *   1. **Typing** — the user is building the abbreviation character by character.
+ *   1. **Typing** -- the user is building the abbreviation character by character.
  *      `isReplaced === false`. The range covers `\` + abbreviation text.
- *   2. **Replaced / cycling** — the abbreviation text has been replaced with a
+ *   2. **Replaced / cycling** -- the abbreviation text has been replaced with a
  *      symbol from the cycle list.  `isReplaced === true`. The range covers the
  *      symbol in the document. Tab advances `cycleIndex`.
  *
@@ -195,7 +195,7 @@ export class TrackedAbbreviation {
   private _processChangeTyping(range: Range, newText: string): ProcessChangeResult {
     if (this.abbreviationRange.containsRange(range)) {
       if (this.abbreviationRange.isBefore(range)) {
-        // Text appended at end — caller checks prefix validity.
+        // Text appended at end -- caller checks prefix validity.
         return { kind: "appended", text: newText };
       }
 

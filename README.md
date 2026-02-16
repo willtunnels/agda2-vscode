@@ -2,29 +2,29 @@
   <img src="./icon.png" width="128" />
 </p>
 
-Interactive development for Agda >= 2.6.1. Communicates directly with Agda via `--interaction-json` for a responsive feel, similar to `agda2-mode` for Emacs.
+Interactive development for Agda >= 2.6.1. This extension communicates directly with Agda via `--interaction-json` for a responsive feel, similar to `agda2-mode` for Emacs.
 
 This extension can download recent versions of Agda for all major platforms, so you do not need a preexisting Agda install.
 
-## ✨ Features
+## Features
 
-- **Full Agda interaction protocol** — load, give, refine, auto, case split, solve, compile, and all query commands
-- **Unicode input method** — type `\` followed by an abbreviation to insert Unicode characters (2,600+ abbreviations from Agda's Emacs mode)
-- **Semantic highlighting** — foreground colors from your theme via semantic tokens; background decorations for unsolved metas, termination problems, coverage issues, etc.
-- **Go-to-definition** — Ctrl+Click or F12 to jump to the definition site of any highlighted name
-- **Info panel** — persistent side panel showing goal types, context, errors, and other Agda output
-- **VSCodeVim integration** — interacts correctly with VSCodeVim, e.g., adjusting goals correctly in the presence of VSCodeVim's bespoke undo/redo history
+- **All Agda commands**: we support load, give, refine, auto, case split, solve, compile, etc.
+- **Unicode input**: type `\` followed by an abbreviation to insert Unicode characters
+- **Semantic highlighting**: foreground colors from your theme via semantic tokens; background decorations for unsolved metas, termination problems, coverage issues, etc.
+- **Go-to-definition**: Ctrl+Click or F12 to jump to the definition site of any highlighted name
+- **Info panel**: persistent side panel showing goal types, context, errors, and other Agda output
+- **VSCodeVim integration**: interacts correctly with VSCodeVim, e.g., accounts for VSCodeVim's bespoke undo/redo mechanism when adjusting goal spans
 
-## ⌨️ Keybindings
+## Keybindings
 
-Two keybinding styles are supported. Use whichever you prefer — they trigger the same commands.
+Two keybinding styles are supported.
 
 | Style     | Prefix     | Example (load)  |
 | --------- | ---------- | --------------- |
 | **Emacs** | `Ctrl+C`   | `Ctrl+C Ctrl+L` |
 | **Evil**  | `Leader M` | `Leader M L`    |
 
-The **Ctrl+C** bindings work out of the box. The **Evil-style** bindings work automatically with [VSCodeVim](https://marketplace.visualstudio.com/items?itemName=vscodevim.vim) — see [below](#vscodevim).
+The **Ctrl+C** bindings work out of the box. The **Evil-style** bindings work given [VSCodeVim](https://marketplace.visualstudio.com/items?itemName=vscodevim.vim) -- see [below](#vscodevim).
 
 ### Basic commands
 
@@ -89,12 +89,12 @@ For action commands, it acts as a boolean flag:
 
 These commands adapt to cursor position. In a goal, they operate on that goal. Outside a goal, they might, e.g., prompt for input or operate on all goals:
 
-- **Infer type** — goal-level `Cmd_infer` or toplevel `Cmd_infer_toplevel`
-- **Compute normal form** — goal-level `Cmd_compute` or toplevel `Cmd_compute_toplevel`
-- **Auto** — goal-level `Cmd_autoOne` or `Cmd_autoAll`
-- **Solve** — goal-level `Cmd_solveOne` or `Cmd_solveAll`
-- **Why in scope** — goal-level `Cmd_why_in_scope` or toplevel `Cmd_why_in_scope_toplevel`
-- **Module contents** — goal-level `Cmd_show_module_contents` or toplevel `Cmd_show_module_contents_toplevel`
+- **Infer type**: goal-level `Cmd_infer` or toplevel `Cmd_infer_toplevel`
+- **Compute normal form**: goal-level `Cmd_compute` or toplevel `Cmd_compute_toplevel`
+- **Auto**: goal-level `Cmd_autoOne` or `Cmd_autoAll`
+- **Solve**: goal-level `Cmd_solveOne` or `Cmd_solveAll`
+- **Why in scope**: goal-level `Cmd_why_in_scope` or toplevel `Cmd_why_in_scope_toplevel`
+- **Module contents**: goal-level `Cmd_show_module_contents` or toplevel `Cmd_show_module_contents_toplevel`
 
 ### Other
 
@@ -106,18 +106,18 @@ All commands are also available via the Command Palette (`Ctrl+Shift+P` / `Cmd+S
 
 Key sequences time out after 2 seconds of inactivity.
 
-## 💡 Tips
+## Tips
 
 Here are some tips for interacting with Agda (these are also applicable to the Emacs `agda2-mode`):
 
 - Goals relocate as you type, but this is only best-effort because rechecking the file with Agda can be expensive. If the type of a goal seems off, try reloading (`Ctrl+C Ctrl+L` / `Leader Space L`).
 - If you run "auto" (`Ctrl+C Ctrl+A` / `Leader Space A`) and your cursor is not inside a goal, Agda will try to find a solution to every goal in the file, quickly dispatching anything trivial.
 
-## 🎹 VSCodeVim
+## VSCodeVim
 
-If you use [VSCodeVim](https://marketplace.visualstudio.com/items?itemName=vscodevim.vim), the Evil-style keybindings work automatically. This extension intercepts `Space` to run `agda.keySequence.leader` and `u` to run `agda.vimUndo`, which wraps VSCodeVim's undo action in some custom logic to ensure goals are shifted correctly. In insert mode and in non-Agda files, keys fall through to VSCodeVim.
+If you have [VSCodeVim](https://marketplace.visualstudio.com/items?itemName=vscodevim.vim) installed, the Evil-style keybindings should work automatically. This extension intercepts `Space` to run `agda.keySequence.leader` and `u` to run `agda.vimUndo`, which wraps VSCodeVim's undo action in some custom logic to ensure goals are shifted correctly. In insert mode and in non-Agda files, keys fall through to VSCodeVim.
 
-To use a different leader key (e.g. `,` instead of the default `Space`), add this to your `keybindings.json`:
+To use a different leader key (e.g., `,` instead of the default `Space`), add this to your `keybindings.json`:
 
 ```json
 {
@@ -132,19 +132,19 @@ To use a different leader key (e.g. `,` instead of the default `Space`), add thi
 }
 ```
 
-## 🔤 Unicode Input
+## Unicode Input
 
-Type `\` followed by an abbreviation to insert Unicode characters directly in your Agda files. The abbreviation table includes over 2,600 entries from Agda's Emacs mode.
+Type `\` followed by an abbreviation to insert Unicode characters. The abbreviation table includes all entries from Agda's Emacs mode.
 
 ### How it works
 
-1. Type `\` — a solid underline appears, indicating an active abbreviation
-2. Continue typing the abbreviation (e.g., `\lambda`, `\to`, `\bN`) — the symbol replaces the text as soon as a complete match exists
-3. You can keep typing to extend (`→` becomes `⊤` when you type `p` to complete `\top`) or backspace to shorten (`⊤` back to `→`)
-4. If the abbreviation has multiple symbols, the underline changes to dashed — press **Tab** / **Shift+Tab** to cycle through alternatives
+1. When you type `\`, a solid underline appears indicating an active abbreviation
+2. As you continue typing the abbreviation (e.g., `\lambda`, `\to`, `\bN`), a symbol replaces the text as soon as a complete match exists
+3. You can keep typing to extend the abbreviation (`→` becomes `⊤` when you type `p` to complete `\top`) or backspace to shorten the abbreviation (`⊤` back to `→`)
+4. If the abbreviation corresponds to multiple symbols, the underline changes to a dashed underline and you can press **Tab** / **Shift+Tab** to cycle through alternatives
 5. The status bar shows the current symbol and all alternatives while cycling
 
-The extension remembers which symbol you chose for each abbreviation during the session. Next time you type the same abbreviation, it starts at your last selection (matching Emacs `agda2-mode`'s default behavior).
+The extension remembers the last symbol you chose for each abbreviation during the session. Next time you type the same abbreviation, it starts at your last selection (matching Emacs `agda2-mode`'s default behavior).
 
 Type `\` followed by a space to insert a literal backslash.
 
@@ -167,7 +167,7 @@ Type `\` followed by a space to insert a literal backslash.
 
 Hover over any Unicode character in an Agda file to see which abbreviations produce it. For example, hovering over `⊓` shows "Type ⊓ using `\glb` or `\sqcap`". Abbreviations where the symbol is not the default expansion are marked with "(tab to cycle)".
 
-## ⚙️ Configuration
+## Configuration
 
 | Setting                         | Default    | Description                                                                                          |
 | ------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------- |
@@ -181,8 +181,14 @@ Hover over any Unicode character in an Agda file to see which abbreviations prod
 | `agda.input.customTranslations` | `{}`       | Custom abbreviation overrides (key: abbreviation, value: symbol or array of symbols for Tab-cycling) |
 | `agda.goalLabels`               | `true`     | Show goal ID labels (`?0`, `?1`, ...) next to interaction points                                     |
 
-## 🔎 Comparison with `banacorn/agda2-mode-vscode`
+## Comparison with `banacorn/agda2-mode-vscode`
 
 This extension is not a fork of the VSCode extension for Agda by banacorn. Its implementation is spirtually closer to Emacs `agda2-mode`. At the time of writing, `banacorn/agda2-mode-vscode` has bugs in a number of cases where we do not, e.g., certain well-typed files fail to highlight and the case split command sometimes inserts ill-formed text (of course, we do not promise our extension is bug-free). Other differences include our VSCodeVim integration, our approach to unicode input, and the look-and-feel of our info panel.
 
-We made an effort to get the small details right, like not highlighting parentheses in comments and putting your cursor in the right place after a give or an automatic case split (even Emacs `agda2-mode` will sometimes put your cursor one past the final character of the line when the line shrinks during a give — we will not).
+We made an effort to get the small details right, like not highlighting parentheses in comments and putting your cursor in the right place after a give or an automatic case split (even Emacs `agda2-mode` will sometimes put your cursor one past the final character of the line when the line shrinks during a give; we will not).
+
+## Position on the use of AI development tools
+
+We do not take the reactionary position that there is something fundamentally low quality about code developed with the assistance of AI tools such as Claude and ChatGPT. The code in this repository was developed with the assistance of agents, as almost all code certainly will be in the proximal future. Of course, AI tools are not yet sufficient to produce quality code in the absence of intervention by a knowledgable developer. Care was taken with this project.
+
+Contributors are welcome to use AI (they will not be dismissed out-of-hand for the hallmarks of such). But the contributions must be of quality and not so large as to be unreviewable.

@@ -123,14 +123,14 @@ export function registerKeySequenceCommands(context: vscode.ExtensionContext): v
     }),
   );
 
-  // Ctrl+C Ctrl+X chord entry — enters cc-x state (parallel to leader-m-x)
+  // Ctrl+C Ctrl+X chord entry -- enters cc-x state (parallel to leader-m-x)
   context.subscriptions.push(
     vscode.commands.registerCommand("agda.keySequence.cc-x", () => {
       setState("cc-x");
     }),
   );
 
-  // Ctrl+C Ctrl+U chord entry — enters cc-u state (parallel to leader-m-u)
+  // Ctrl+C Ctrl+U chord entry -- enters cc-u state (parallel to leader-m-u)
   // with universalArgCount=1.  If already in cc-u, increments the count.
   context.subscriptions.push(
     vscode.commands.registerCommand("agda.keySequence.cc-u", () => {

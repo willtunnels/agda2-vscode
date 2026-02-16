@@ -46,12 +46,12 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   private readonly disposables = new Array<Disposable>();
   private readonly rewriter;
 
-  /** Solid underline — abbreviation being typed. */
+  /** Solid underline -- abbreviation being typed. */
   private readonly typingDecorationType = window.createTextEditorDecorationType({
     textDecoration: "underline",
   });
 
-  /** Dashed underline — replaced symbol, cycleable via Tab. */
+  /** Dashed underline -- replaced symbol, cycleable via Tab. */
   private readonly cyclingDecorationType = window.createTextEditorDecorationType({
     textDecoration: "underline dashed",
   });
@@ -60,7 +60,7 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
    * True while we are inside a workspace.applyEdit() call.
    *
    * During applyEdit, VS Code fires a re-entrant onDidChangeTextDocument
-   * for our own edit.  That event must be skipped — if the engine saw it,
+   * for our own edit.  That event must be skipped -- if the engine saw it,
    * processChange would see an overlapping edit and kill the tracked
    * abbreviation before enterReplacedState/updateRangeAfterCycleEdit runs.
    *
@@ -87,7 +87,7 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
 
   /**
    * Non-null while a drain loop is running.  Serves two purposes:
-   *   1. Reentrancy guard — drainQueue() is a no-op if already set.
+   *   1. Reentrancy guard -- drainQueue() is a no-op if already set.
    *   2. Awaitable by flush() to wait for the queue to empty.
    */
   private drainPromise: Promise<void> | null = null;
@@ -116,7 +116,7 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
 
         if (this.isApplyingEdit) {
           if (!this.seenReentrantEvent) {
-            // First event during our applyEdit — this is the
+            // First event during our applyEdit -- this is the
             // re-entrant notification for our own edit.  Skip it.
             this.seenReentrantEvent = true;
             return;
@@ -138,7 +138,7 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
         }
 
         // Selection events during our own edits are just the cursor
-        // being repositioned by applyEdit — safe to ignore.
+        // being repositioned by applyEdit -- safe to ignore.
         if (this.isApplyingEdit) {
           return;
         }
@@ -229,7 +229,7 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
       case "selection":
         // Read CURRENT live selections rather than the potentially-stale
         // offsets captured when the event was enqueued.  The document may
-        // have changed between enqueue time and processing time — e.g.,
+        // have changed between enqueue time and processing time -- e.g.,
         // an eager replacement in a preceding change op shrinks `\t` to
         // `◂`, but the selection event still carries the pre-replacement
         // cursor offset.  Using live positions avoids killing the

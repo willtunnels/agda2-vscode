@@ -199,7 +199,7 @@ export type AgdaResponse =
   | { kind: "DoneExiting" };
 
 // ---------------------------------------------------------------------------
-// Response normalization — called at the parse boundary (protocol.ts).
+// Response normalization -- called at the parse boundary (protocol.ts).
 // ---------------------------------------------------------------------------
 
 /**
@@ -249,7 +249,7 @@ export function normalizeResponse(raw: AgdaResponse): AgdaResponse {
     info.constraints = info.constraints.map(normalizeMessage);
   }
 
-  // Error variant: Agda nests the message inside an `error` object — pull it up.
+  // Error variant: Agda nests the message inside an `error` object -- pull it up.
   if (info.kind === "Error" && typeof info.message !== "string") {
     if (info.error != null) {
       info.message = normalizeMessage(info.error);

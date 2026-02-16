@@ -11,7 +11,7 @@
 
 declare const agdaVersionBrand: unique symbol;
 
-/** An Agda version. Opaque — not assignable to/from number[]. */
+/** An Agda version. Opaque -- not assignable to/from number[]. */
 export type AgdaVersion = { readonly [agdaVersionBrand]: true };
 
 function wrap(parts: number[]): AgdaVersion {

@@ -35,7 +35,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
   statusBar.text = "$(circle-outline) Agda";
-  statusBar.tooltip = "Agda — not started (load a file with Ctrl+C Ctrl+L)";
+  statusBar.tooltip = "Agda -- not started (load a file with Ctrl+C Ctrl+L)";
   statusBar.show();
 
   registerKeySequenceCommands(context);
@@ -141,7 +141,7 @@ export function activate(context: vscode.ExtensionContext): void {
           reason === TextDocumentChangeReason.Undo || reason === TextDocumentChangeReason.Redo;
 
         if (goals.isCollatingUndo(uri)) {
-          // VSCodeVim undo — skip goal adjustment; collation handled by
+          // VSCodeVim undo -- skip goal adjustment; collation handled by
           // agda.vimUndo/agda.vimRedo setTimeout callback.
         } else if (isNativeUndoRedo && e.contentChanges.length > 1) {
           const postText = e.document.getText();
@@ -151,7 +151,7 @@ export function activate(context: vscode.ExtensionContext): void {
             goals.adjustForEdits(uri, [merged]);
           }
         } else {
-          // Normal edit (or single-change undo) — process directly
+          // Normal edit (or single-change undo) -- process directly
           goals.adjustForEdits(uri, e.contentChanges);
         }
 

@@ -30,7 +30,7 @@ import {
 
 describe("agdaColToVscodeCol", () => {
   it("returns same column for BMP-only text", () => {
-    // "hello" — all BMP, 1-based col 3 → 1-based VS Code col 3
+    // "hello" -- all BMP, 1-based col 3 → 1-based VS Code col 3
     expect(agdaColToVscodeCol("hello", 3)).toBe(3);
   });
 
@@ -47,7 +47,7 @@ describe("agdaColToVscodeCol", () => {
   });
 
   it("shifts column after multiple supplementary-plane characters", () => {
-    // "𝕄𝕏x" — two supplementary chars then BMP
+    // "𝕄𝕏x" -- two supplementary chars then BMP
     // Code points: 𝕄=1, 𝕏=2, x=3
     // UTF-16: 𝕄=1-2, 𝕏=3-4, x=5
     const line = "𝕄𝕏x";
@@ -69,7 +69,7 @@ function detectVersion(binaryPath: string) {
 }
 
 for (const { version, binaryPath } of agdaBinaries) {
-  describe(`Location conversion — Agda v${version}`, () => {
+  describe(`Location conversion -- Agda v${version}`, () => {
     it("parseLocationsInString converts code-point columns to UTF-16", async () => {
       const agdaVersion = detectVersion(binaryPath);
       const sep = versionGte(agdaVersion, V2_8) ? "." : ",";

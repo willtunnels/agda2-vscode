@@ -129,9 +129,9 @@ const INITIAL_TEXT = [
   "  suc : Nat -> Nat", // line 2
   "", // line 3
   "add : Nat -> Nat -> Nat", // line 4
-  "add n m = {! ? !}", // line 5 — goal 0
+  "add n m = {! ? !}", // line 5 -- goal 0
   "", // line 6
-  "thing : {!  !}", // line 7 — goal 1
+  "thing : {!  !}", // line 7 -- goal 1
   "thing = zero", // line 8
 ].join("\n");
 
@@ -214,7 +214,7 @@ describe("give-with-question-mark bug", () => {
     // OLD (buggy) behavior: handleGiveAction calls expandQuestionMarks
     const goal0Range = gm.getAll(uri)[0].range;
     const buggyReplacement = expandQuestionMarks("?");
-    expect(buggyReplacement).toBe(GOAL_MARKER); // "{!  !}" — 6 chars, not 1
+    expect(buggyReplacement).toBe(GOAL_MARKER); // "{!  !}" -- 6 chars, not 1
 
     doc._replaceRange(goal0Range, buggyReplacement);
     gm.adjustForEdits(uri, [change(goal0Range, buggyReplacement)]);
@@ -226,7 +226,7 @@ describe("give-with-question-mark bug", () => {
       ipWithRange(1, offsets.goal1Start + 1 - agdaShrink, offsets.goal1End + 1 - agdaShrink),
     ];
 
-    // Using forceScan=false trusts Agda's offsets — which are now wrong
+    // Using forceScan=false trusts Agda's offsets -- which are now wrong
     gm.updateGoals(doc, postGiveIPs, false);
 
     const goal1 = gm.getAll(uri).find((g) => g.id === 1)!;
@@ -250,7 +250,7 @@ describe("give-with-question-mark bug", () => {
     const postGiveIPs = simulateGiveEdit(doc, uri, offsets);
 
     // After the give edit, the document has "?" where goal 0 was.
-    // Agda's offsets match the document — getText at the new goal's range
+    // Agda's offsets match the document -- getText at the new goal's range
     // should return "?".
     const newGoalIp = postGiveIPs[0];
     const interval = newGoalIp.range[0];

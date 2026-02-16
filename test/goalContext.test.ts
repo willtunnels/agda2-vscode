@@ -22,7 +22,7 @@ const agdaBinaries = inject("agdaBinaries");
 const fixturePath = path.resolve(path.join(__dirname, "fixtures", "Goals.agda"));
 
 for (const { version, binaryPath } of agdaBinaries) {
-  describe(`Goal type and context — Agda v${version}`, () => {
+  describe(`Goal type and context -- Agda v${version}`, () => {
     it("Cmd_goal_type_context returns GoalSpecific with GoalType kind", async () => {
       const agda = await spawnAgda(binaryPath);
       try {
@@ -59,7 +59,7 @@ for (const { version, binaryPath } of agdaBinaries) {
         const loadResponses = await agda.sendCommand(loadCmd);
 
         const goalIds = findInteractionPoints(loadResponses);
-        // Goal 0 is `x = {!!}` — no variables in context
+        // Goal 0 is `x = {!!}` -- no variables in context
         const goalId = goalIds[0];
 
         const cmd = `IOTCM ${haskellStringQuote(fixturePath)} NonInteractive Indirect (Cmd_goal_type_context AsIs ${goalId} noRange "")`;
@@ -96,7 +96,7 @@ for (const { version, binaryPath } of agdaBinaries) {
         const loadResponses = await agda.sendCommand(loadCmd);
 
         const goalIds = findInteractionPoints(loadResponses);
-        // Goal 1 is `y n = {!!}` — has `n : ℕ` in context
+        // Goal 1 is `y n = {!!}` -- has `n : ℕ` in context
         const goalId = goalIds[1];
 
         const cmd = `IOTCM ${haskellStringQuote(fixturePath)} NonInteractive Indirect (Cmd_goal_type_context AsIs ${goalId} noRange "")`;

@@ -1,5 +1,5 @@
 /**
- * Unit tests for src/util/editAdjust.ts — the edit-adjustment math that keeps
+ * Unit tests for src/util/editAdjust.ts -- the edit-adjustment math that keeps
  * stored highlighting in sync with document edits.
  *
  * Uses the vscode mock in test/__mocks__/vscode.ts via the vitest alias.
@@ -64,7 +64,7 @@ function expectRange(actual: Range | null, sl: number, sc: number, el: number, e
 
 describe("processChanges", () => {
   it("computes lineDelta and newEndChar for a single-line insertion", () => {
-    // Insert "abc" at (2, 5) — replaces nothing
+    // Insert "abc" at (2, 5) -- replaces nothing
     const result = processChanges([change(2, 5, 2, 5, "abc")]);
     expect(result).toHaveLength(1);
     expect(result[0].lineDelta).toBe(0);
@@ -72,7 +72,7 @@ describe("processChanges", () => {
   });
 
   it("computes lineDelta for a multi-line insertion", () => {
-    // Insert "abc\ndef" at (1, 0) — 1 new line
+    // Insert "abc\ndef" at (1, 0) -- 1 new line
     const result = processChanges([change(1, 0, 1, 0, "abc\ndef")]);
     expect(result).toHaveLength(1);
     expect(result[0].lineDelta).toBe(1);
@@ -80,7 +80,7 @@ describe("processChanges", () => {
   });
 
   it("computes negative lineDelta for line deletion", () => {
-    // Delete from (1, 0) to (3, 0) — removes 2 lines, replaces with nothing
+    // Delete from (1, 0) to (3, 0) -- removes 2 lines, replaces with nothing
     const result = processChanges([change(1, 0, 3, 0, "")]);
     expect(result).toHaveLength(1);
     expect(result[0].lineDelta).toBe(-2);
@@ -110,7 +110,7 @@ describe("processChanges", () => {
 });
 
 // ---------------------------------------------------------------------------
-// adjustRange — for arbitrary user edits
+// adjustRange -- for arbitrary user edits
 // ---------------------------------------------------------------------------
 
 describe("adjustRange", () => {
@@ -133,7 +133,7 @@ describe("adjustRange", () => {
   describe("range entirely after edit", () => {
     it("shifts range on a different line", () => {
       const range = r(5, 2, 5, 8);
-      // Edit on line 3: delete 3 chars, insert 5 chars — same line, +0 lines
+      // Edit on line 3: delete 3 chars, insert 5 chars -- same line, +0 lines
       const ed = edit(3, 0, 3, 3, 0, 5);
       const result = adjustRange(range, ed);
       expectRange(result, 5, 2, 5, 8); // different line, no char shift
@@ -225,7 +225,7 @@ describe("adjustRange", () => {
 });
 
 // ---------------------------------------------------------------------------
-// expandRange — for ? → goal marker expansion
+// expandRange -- for ? → goal marker expansion
 // ---------------------------------------------------------------------------
 
 describe("expandRange", () => {
@@ -238,7 +238,7 @@ describe("expandRange", () => {
   it("range entirely before insertion point → unchanged", () => {
     const range = r(0, 0, 0, 10);
     const result = expandRange(range, qExpand);
-    expect(result).toBe(range); // same reference — no change
+    expect(result).toBe(range); // same reference -- no change
   });
 
   it("range entirely after insertion point → shifts by delta", () => {
@@ -301,7 +301,7 @@ describe("expandRange", () => {
 
 describe("processChanges + adjustRange integration", () => {
   it("typing a character shifts subsequent ranges", () => {
-    // User types "x" at (2, 5) — inserts 1 char
+    // User types "x" at (2, 5) -- inserts 1 char
     const changes = [change(2, 5, 2, 5, "x")];
     const edits = processChanges(changes);
     expect(edits).toHaveLength(1);
@@ -343,13 +343,13 @@ describe("processChanges + adjustRange integration", () => {
       range = adjustRange(range!, ed);
     }
     // Neither edit intersects line 7; both are zero-width insertions on earlier lines
-    // But the range is on a different line from both edits, so no char shift — just stays
+    // But the range is on a different line from both edits, so no char shift -- just stays
     expectRange(range, 7, 0, 7, 10);
   });
 });
 
 // ---------------------------------------------------------------------------
-// computeSingleChange — undo/redo collation
+// computeSingleChange -- undo/redo collation
 // ---------------------------------------------------------------------------
 
 describe("computeSingleChange", () => {
@@ -419,7 +419,7 @@ describe("computeSingleChange", () => {
 
     // Verify that this change WOULD remove a goal at [0:9, 0:15]
     // The goal {!  !} is at [9,15] in the pre-change doc (postGive).
-    // The edit replaces [6,12) — which starts before the goal and ends
+    // The edit replaces [6,12) -- which starts before the goal and ends
     // inside it, crossing the left boundary.
     const goalRange = r(0, 9, 0, 15);
     const editParams = processChanges([result!])[0];
@@ -474,7 +474,7 @@ describe("computeSingleChange", () => {
 });
 
 // ---------------------------------------------------------------------------
-// reconstructPreText — recover pre-change text for native undo collation
+// reconstructPreText -- recover pre-change text for native undo collation
 // ---------------------------------------------------------------------------
 
 describe("reconstructPreText", () => {
@@ -496,7 +496,7 @@ describe("reconstructPreText", () => {
     const pre = reconstructPreText(postText, [
       { range: r(0, 1, 0, 2), rangeOffset: 1, rangeLength: 1, text: "" },
     ]);
-    // Pre-text should be "a\0b" — placeholder for the deleted char.
+    // Pre-text should be "a\0b" -- placeholder for the deleted char.
     // computeSingleChange("a\0b", "ab") will correctly find the changed region.
     expect(pre).toBe("a\0b");
 
@@ -540,7 +540,7 @@ describe("reconstructPreText", () => {
     const pre = reconstructPreText(postText, changes);
 
     // Pre should be: "foo = " + "\0\0\0" + "{! " + "" + "!}\n"
-    // = "foo = \0\0\0{! !}\n" — wait, let me trace more carefully.
+    // = "foo = \0\0\0{! !}\n" -- wait, let me trace more carefully.
     //
     // Pre-doc: "foo = id {!  !}\n" (16 chars)
     // sorted by rangeOffset: change A (offset 6), change B (offset 12)

@@ -1,4 +1,4 @@
-// Agda Info Panel — WebviewPanel that displays goal info, errors, and other
+// Agda Info Panel -- WebviewPanel that displays goal info, errors, and other
 // DisplayInfo responses in a persistent, richly-formatted side panel
 // (equivalent to Emacs's *Agda Information* buffer).
 
@@ -175,12 +175,12 @@ export class InfoPanel implements vscode.Disposable {
 // HTML builder helpers
 // ---------------------------------------------------------------------------
 
-/** Escaped HTML string — safe to embed in the document. */
+/** Escaped HTML string -- safe to embed in the document. */
 interface RawHtml {
   readonly __html: string;
 }
 
-/** Mark a string as pre-escaped HTML. Explicit opt-in — grep for raw() to audit. */
+/** Mark a string as pre-escaped HTML. Explicit opt-in -- grep for raw() to audit. */
 function raw(html: string): RawHtml {
   return { __html: html };
 }
@@ -492,7 +492,7 @@ function renderSplitTable(lines: string[], separator: string): RawHtml {
   const rows = lines.map((line) => {
     const idx = line.indexOf(separator);
     if (idx < 0) {
-      // No separator — render as a full-width pre
+      // No separator -- render as a full-width pre
       return h("tr", {}, h("td", { colspan: "3" }, pre(line)));
     }
     const lhs = line.slice(0, idx);

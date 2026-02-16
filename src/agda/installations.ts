@@ -158,7 +158,7 @@ export async function downloadAndInstall(
     try {
       await execFileAsync("xattr", ["-cr", binDir]);
     } catch {
-      // Not fatal — attribute may not be set
+      // Not fatal -- attribute may not be set
     }
   }
 
