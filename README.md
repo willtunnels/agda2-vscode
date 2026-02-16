@@ -187,8 +187,8 @@ This extension is not a fork of the VSCode extension for Agda by banacorn. Its i
 
 We made an effort to get the small details right, like not highlighting parentheses in comments and putting your cursor in the right place after a give or an automatic case split (even Emacs `agda2-mode` will sometimes put your cursor one past the final character of the line when the line shrinks during a give; we will not).
 
-## Position on the use of AI development tools
+## On the use of AI
 
-We do not take the reactionary position that there is something fundamentally low quality about code developed with the assistance of AI tools such as Claude and ChatGPT. The code in this repository was developed with the assistance of agents, as almost all code certainly will be in the proximal future. Of course, AI tools are not yet sufficient to produce quality code in the absence of intervention by a knowledgable developer. Care was taken with this project.
+The code in this repository was developed with the assistance of agents. Of course, AI tools are not yet sufficient to produce quality code in the absence of intervention by a knowledgable developer. Care was taken with this project (it was not "vibe coded").
 
-Contributors are welcome to use AI (they will not be dismissed out-of-hand for the hallmarks of such). But the contributions must be of quality and not so large as to be unreviewable.
+Contributors are welcome to use AI, but the contributions must be of quality and not so large as to be unreviewable.
