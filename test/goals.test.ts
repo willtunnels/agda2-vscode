@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { Range, Position } from "vscode";
-import { GoalManager, GOAL_MARKER, expandQuestionMarks } from "../src/core/goals.js";
+import { GoalManager, GOAL_MARKER, expandQuestionMarks, goalCursorPosition } from "../src/core/goals.js";
 import type { InteractionPointWithRange } from "../src/agda/responses.js";
 
 // ---------------------------------------------------------------------------
@@ -28,6 +28,7 @@ function mockDocument(uri: string, text: string) {
 
   return {
     uri: { toString: () => uri },
+    offsetAt,
     getText(range?: Range) {
       if (!range) return text;
       return text.slice(offsetAt(range.start), offsetAt(range.end));
@@ -387,6 +388,58 @@ describe("GoalManager", () => {
 
       gm.clear("file:///a.agda");
       expect(gm.previousGoal("file:///a.agda", new Position(0, 10))).toBeUndefined();
+    });
+  });
+
+  // -- goalCursorPosition ---------------------------------------------------
+
+  describe("goalCursorPosition", () => {
+    it("lands on first non-whitespace character inside goal", () => {
+      //  f = {! zero !}
+      //  01234567890123
+      const doc = mockDocument("file:///a.agda", "f = {! zero !}");
+      gm.updateGoals(doc, [ip(0)], true);
+      const goal = gm.getAll("file:///a.agda")[0];
+      const pos = goalCursorPosition(goal, doc as any);
+      // 'z' is at column 7
+      expect(pos.line).toBe(0);
+      expect(pos.character).toBe(7);
+    });
+
+    it("lands after '{!' when goal body is all whitespace", () => {
+      //  f = {!  !}
+      //  0123456789
+      const doc = mockDocument("file:///a.agda", "f = {!  !}");
+      gm.updateGoals(doc, [ip(0)], true);
+      const goal = gm.getAll("file:///a.agda")[0];
+      const pos = goalCursorPosition(goal, doc as any);
+      // character after '{!' is at column 6
+      expect(pos.line).toBe(0);
+      expect(pos.character).toBe(6);
+    });
+
+    it("lands after '{!' when goal body is empty", () => {
+      //  f = {!!}
+      //  01234567
+      const doc = mockDocument("file:///a.agda", "f = {!!}");
+      gm.updateGoals(doc, [ip(0)], true);
+      const goal = gm.getAll("file:///a.agda")[0];
+      const pos = goalCursorPosition(goal, doc as any);
+      // character after '{!' is at column 6
+      expect(pos.line).toBe(0);
+      expect(pos.character).toBe(6);
+    });
+
+    it("skips leading whitespace to reach content", () => {
+      //  f = {!   suc zero   !}
+      //  0123456789012345678901
+      const doc = mockDocument("file:///a.agda", "f = {!   suc zero   !}");
+      gm.updateGoals(doc, [ip(0)], true);
+      const goal = gm.getAll("file:///a.agda")[0];
+      const pos = goalCursorPosition(goal, doc as any);
+      // 's' of 'suc' is at column 9
+      expect(pos.line).toBe(0);
+      expect(pos.character).toBe(9);
     });
   });
 

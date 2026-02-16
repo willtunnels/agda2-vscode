@@ -163,13 +163,35 @@ export interface Goal {
 
 /**
  * The inner range of a goal, excluding the `{!` and `!}` delimiters.
- * Returns undefined if the goal is null/undefined.
+ * Returns undefined if the goal is null/undefined, or if the goal text
+ * does not actually start with `{!` and end with `!}`.
  */
-export function goalInnerRange(goal: Goal | null | undefined): vscode.Range | undefined {
+export function goalInnerRange(
+  goal: Goal | null | undefined,
+  document: vscode.TextDocument,
+): vscode.Range | undefined {
   if (!goal) return undefined;
+
+  const text = document.getText(goal.range);
+  if (!text.startsWith("{!") || !text.endsWith("!}")) return undefined;
+
   const start = goal.range.start.translate(0, 2); // skip `{!`
   const end = goal.range.end.translate(0, -2); // skip `!}`
   return new vscode.Range(start, end);
+}
+
+/**
+ * Cursor position for goal navigation: the first non-whitespace character inside the `{!` / `!}`
+ * delimiters, or the character after `{!` if the goal is empty or whitespace-only.
+ */
+export function goalCursorPosition(goal: Goal, document: vscode.TextDocument): vscode.Position {
+  const inner = goalInnerRange(goal, document);
+  if (!inner) return goal.range.start;
+
+  const match = /\S/.exec(document.getText(inner));
+  if (match) return document.positionAt(document.offsetAt(inner.start) + match.index);
+
+  return goal.range.start.translate(0, 2); // position cursor after `{!`
 }
 
 /** State for undo/redo collation. While active, individual

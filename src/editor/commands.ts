@@ -49,6 +49,7 @@ import {
   expandQuestionMarks,
   type Goal,
   goalInnerRange,
+  goalCursorPosition,
   MAKE_CASE_CURSOR_OFFSET,
 } from "../core/goals.js";
 import { HighlightingManager } from "../core/highlighting.js";
@@ -275,7 +276,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
   // When errorGoal is provided, error-atom highlighting is pinned to the goal
   // range instead of using Agda's (potentially stale) offsets.
   function makeStreamHandler(editor: TextEditor, opts?: { errorGoal?: Goal }) {
-    const errorOverride = goalInnerRange(opts?.errorGoal);
+    const errorOverride = goalInnerRange(opts?.errorGoal, editor.document);
     return (response: AgdaResponse) => {
       switch (response.kind) {
         case "HighlightingInfo":
@@ -780,7 +781,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     if (!editor) return;
     const goal = goals.nextGoal(editor.document.uri.toString(), editor.selection.active);
     if (goal) {
-      const pos = goal.range.start;
+      const pos = goalCursorPosition(goal, editor.document);
       editor.selection = new vscode.Selection(pos, pos);
       editor.revealRange(goal.range);
     }
@@ -792,7 +793,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     if (!editor) return;
     const goal = goals.previousGoal(editor.document.uri.toString(), editor.selection.active);
     if (goal) {
-      const pos = goal.range.start;
+      const pos = goalCursorPosition(goal, editor.document);
       editor.selection = new vscode.Selection(pos, pos);
       editor.revealRange(goal.range);
     }
