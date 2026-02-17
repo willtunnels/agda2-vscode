@@ -12,18 +12,17 @@ import { describe, it, expect, inject } from "vitest";
 import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import { normalizeResponse, type AgdaResponse, type DisplayInfo } from "../src/agda/responses.js";
 import { parseAgdaVersion, versionGte, V2_8, agdaVersion } from "../src/agda/version.js";
 import {
   agdaColToVscodeCol,
+  isResolvedLocation,
   parseLocationsInString,
-  linkedTextToString,
+  displayLinkedText,
 } from "../src/util/agdaLocation.js";
 import {
   spawnAgda,
   haskellStringQuote,
   findDisplayInfo,
-  type TestAgdaBinary,
 } from "./helpers/agdaSession.js";
 
 // -- Pure column conversion tests (version-independent) --
@@ -100,7 +99,7 @@ for (const { version, binaryPath } of agdaBinaries) {
           docCache.set(fixturePath, mockDoc);
 
           const linked = await parseLocationsInString(info!.message, docCache, agdaVersion);
-          const converted = linkedTextToString(linked, agdaVersion);
+          const converted = displayLinkedText(linked, agdaVersion);
 
           // Line 16 is "𝕄error = bbb"
           // 𝕄 is supplementary (2 UTF-16 code units), so cols shift by +1.
@@ -112,9 +111,9 @@ for (const { version, binaryPath } of agdaBinaries) {
           expect(converted).toContain("bbb");
 
           // Verify we got structured location data
-          const locSegments = linked.filter((s) => s.kind === "location");
+          const locSegments = linked.filter(isResolvedLocation);
           expect(locSegments.length).toBeGreaterThan(0);
-          expect(locSegments[0].kind === "location" && locSegments[0].col).toBe(11);
+          expect(locSegments[0].col).toBe(11);
         }
       } finally {
         agda.close();
@@ -141,7 +140,7 @@ describe("BMP-only location conversion", () => {
     docCache.set("/path/to/File.agda", mockDoc);
 
     const linked = await parseLocationsInString(text, docCache, version);
-    const converted = linkedTextToString(linked, version);
+    const converted = displayLinkedText(linked, version);
     // BMP-only: columns should be identical
     expect(converted).toContain(":5,3-10");
   });

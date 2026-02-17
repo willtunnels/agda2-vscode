@@ -41,76 +41,68 @@ import { agdaCpOffsetToUtf16, toAgdaOffset } from "./offsets.js";
 // LinkedText -- text with embedded clickable file locations
 // ---------------------------------------------------------------------------
 //
-// Represents a string that may contain file:line,col locations. Each location
-// has been parsed and its columns converted from Agda code points to VS Code
-// UTF-16. The info panel renders links from the structured data (no re-parsing
-// needed). linkedTextToString extracts plain text for non-clickable contexts.
+// Represents a string that may contain file:line,col locations. Each location has been parsed and
+// its columns converted from Agda code points to VS Code UTF-16. The info panel renders links from
+// the structured data. displaySegment extracts plain text for non-clickable contexts.
 
-/** A segment of linked text -- either plain text or a clickable location. */
+/** A single-line location: filepath:line,col-endCol */
+export type SingleLineLocation = {
+  kind: "single-line-location";
+  filepath: string;
+  line: number;   // 1-based VS Code line
+  col: number;    // 1-based VS Code UTF-16 column
+  endCol: number; // 1-based VS Code UTF-16 end column
+};
+
+/** A multi-line location: filepath:line,col-endLine,endCol */
+export type MultiLineLocation = {
+  kind: "multi-line-location";
+  filepath: string;
+  line: number;    // 1-based VS Code line
+  col: number;     // 1-based VS Code UTF-16 column
+  endLine: number; // 1-based VS Code end line
+  endCol: number;  // 1-based VS Code UTF-16 end column
+};
+
+export type ResolvedLocation = SingleLineLocation | MultiLineLocation;
+
 export type LinkedTextSegment =
   | { kind: "text"; text: string }
-  | {
-      kind: "location";
-      filepath: string;
-      line?: number; // 1-based VS Code line (only absent if file unavailable)
-      col?: number; // 1-based VS Code UTF-16 column (only absent if file unavailable)
-      endLine?: number; // 1-based end line (multi-line ranges only)
-      endCol?: number; // 1-based end column (only absent if file unavailable)
-    };
+  | { kind: "unresolved-location"; filepath: string }
+  | ResolvedLocation;
 
-/**
- * Text with embedded file location links. Locations have already been
- * converted from Agda code-point columns to VS Code UTF-16 columns.
- */
 export type LinkedText = LinkedTextSegment[];
 
-/** Type guard: true when a location segment has all resolved position fields. */
-export function isResolvedLocation(
-  seg: LinkedTextSegment & { kind: "location" },
-): seg is LinkedTextSegment & { kind: "location"; line: number; col: number; endCol: number } {
-  return seg.line !== undefined && seg.col !== undefined && seg.endCol !== undefined;
+export function isResolvedLocation(seg: LinkedTextSegment): seg is ResolvedLocation {
+  return seg.kind === "single-line-location" || seg.kind === "multi-line-location";
 }
 
-/**
- * Display text for a single segment. Resolved locations reconstruct
- * "filepath:line,col-end" (or dot-separated for Agda >= 2.8.0);
- * unresolved locations show "filepath:?,?-?,?".
- */
-export function displaySegment(seg: LinkedTextSegment, version: AgdaVersion): string {
-  if (seg.kind === "text") return seg.text;
-  const sep = versionGte(version, V2_8) ? "." : ",";
-  if (!isResolvedLocation(seg)) return `${seg.filepath}:?${sep}?-?${sep}?`;
-  if (seg.endLine !== undefined) {
-    return `${seg.filepath}:${seg.line}${sep}${seg.col}-${seg.endLine}${sep}${seg.endCol}`;
-  }
-  return `${seg.filepath}:${seg.line}${sep}${seg.col}-${seg.endCol}`;
-}
-
-/**
- * Convert a resolved location segment to a VS Code Range (0-based).
- * Returns null for unresolved locations (missing line/col).
- */
-export function segmentRange(seg: LinkedTextSegment & { kind: "location" }): vscode.Range | null {
-  if (!isResolvedLocation(seg)) return null;
-  const startLine = seg.line - 1;
-  const startCol = seg.col - 1;
-  const endLine = seg.endLine !== undefined ? seg.endLine - 1 : startLine;
-  const endCol = seg.endCol - 1;
-  return new vscode.Range(startLine, startCol, endLine, endCol);
-}
-
-/** Convert a LinkedText to its display string, with "?" for unresolved locations. */
 export function displayLinkedText(lt: LinkedText, version: AgdaVersion): string {
   return lt.map((seg) => displaySegment(seg, version)).join("");
 }
 
-/** Concatenate a LinkedText back into a plain string (for diagnostic parsing). */
-export const linkedTextToString = displayLinkedText;
+/**
+ * Display text for a single segment. Resolved locations reconstruct
+ * "filepath:line,col-end" (or dot-separated for Agda >= 2.8.0).
+ * Unresolved locations show "filepath:?,?-?,?".
+ */
+export function displaySegment(seg: LinkedTextSegment, version: AgdaVersion): string {
+  const sep = versionGte(version, V2_8) ? "." : ",";
+  switch (seg.kind) {
+    case "text":
+      return seg.text;
+    case "unresolved-location":
+      return `${seg.filepath}:?${sep}?-?${sep}?`;
+    case "single-line-location":
+      return `${seg.filepath}:${seg.line}${sep}${seg.col}-${seg.endCol}`;
+    case "multi-line-location":
+      return `${seg.filepath}:${seg.line}${sep}${seg.col}-${seg.endLine}${sep}${seg.endCol}`;
+  }
+}
 
-// ---------------------------------------------------------------------------
-// DisplayInfoVSCode -- DisplayInfo with LinkedText for location-bearing fields
-// ---------------------------------------------------------------------------
-
+/**
+  * DisplayInfoVSCode -- DisplayInfo with LinkedText for location-bearing fields
+  */
 export type DisplayInfoVSCode =
   | { kind: "CompilationOk"; backend?: string; warnings: LinkedText[]; errors: LinkedText[] }
   | { kind: "Constraints"; constraints: string[] }
@@ -135,10 +127,6 @@ export type DisplayInfoVSCode =
   | { kind: "Version"; version: string }
   | { kind: "GoalSpecific"; interactionPoint: InteractionPointWithRange; goalInfo: GoalInfo };
 
-// ---------------------------------------------------------------------------
-// Regex building blocks
-// ---------------------------------------------------------------------------
-
 /** Agda file extension pattern (non-capturing). Matches .agda, .lagda, .lagda.md, etc. */
 const AGDA_EXT = String.raw`\.(?:agda|lagda(?:\.(?:md|rst|tex|org))?)`;
 
@@ -155,9 +143,65 @@ function buildLocationRegex(version: AgdaVersion): RegExp {
   return new RegExp(String.raw`${AGDA_PATH}:${range}`, "g");
 }
 
-// ---------------------------------------------------------------------------
-// Column conversion
-// ---------------------------------------------------------------------------
+/** A raw regex match from a location string */
+interface LocationMatch {
+  textStart: number;
+  textEnd: number;
+  filepath: string;
+  line: number;             // 1-based
+  col: number;              // 1-based Agda code-point
+  end1: number;
+  end2: number | undefined;
+}
+
+/**
+ * Find all file-path locations in a string.
+ * Goal-relative ranges like "1,1-4" (no file path) are ignored.
+ */
+function findLocationsInString(text: string, version: AgdaVersion): LocationMatch[] {
+  const locations: LocationMatch[] = [];
+  const locationRe = buildLocationRegex(version);
+  let match: RegExpExecArray | null;
+  while ((match = locationRe.exec(text)) !== null) {
+    locations.push({
+      textStart: match.index,
+      textEnd: match.index + match[0].length,
+      filepath: match[1],
+      line: Number(match[2]),
+      col: Number(match[3]),
+      end1: Number(match[4]),
+      end2: match[5] ? Number(match[5]) : undefined,
+    });
+  }
+  return locations;
+}
+
+/** A function that returns a line's text given a 1-based Agda line number. */
+type LineGetter = (agdaLine: number) => string;
+
+function lineGetterFromDocument(doc: vscode.TextDocument): LineGetter {
+  return (agdaLine: number) => {
+    const line0 = agdaLine - 1;
+    if (line0 < 0 || line0 >= doc.lineCount) return "";
+    return doc.lineAt(line0).text;
+  };
+}
+
+function convertLocation(loc: LocationMatch, getLine: LineGetter): ResolvedLocation {
+  const lineText = getLine(loc.line);
+  const newCol = agdaColToVscodeCol(lineText, loc.col);
+
+  if (loc.end2 !== undefined) {
+    // Multi-line: line,col-endLine,endCol
+    const endLineText = getLine(loc.end1);
+    const newEnd2 = agdaColToVscodeCol(endLineText, loc.end2);
+    return { kind: "multi-line-location", filepath: loc.filepath, line: loc.line, col: newCol, endLine: loc.end1, endCol: newEnd2 };
+  } else {
+    // Single-line: line,col-endCol
+    const newEnd1 = agdaColToVscodeCol(lineText, loc.end1);
+    return { kind: "single-line-location", filepath: loc.filepath, line: loc.line, col: newCol, endCol: newEnd1 };
+  }
+}
 
 /**
  * Convert a 1-based Agda code-point column to a 1-based VS Code UTF-16
@@ -173,18 +217,26 @@ export function agdaColToVscodeCol(lineText: string, agdaCol: number): number {
 }
 
 /**
- * Get line text from a document. Returns "" for out-of-range lines.
- * Line number is 1-based (Agda convention).
+ * Assemble a LinkedText from location matches, filling in the gaps with `text`.
  */
-function getLineText(doc: vscode.TextDocument, agdaLine: number): string {
-  const line0 = agdaLine - 1;
-  if (line0 < 0 || line0 >= doc.lineCount) return "";
-  return doc.lineAt(line0).text;
+function assembleLinkedText(
+  text: string,
+  locations: readonly { textStart: number; textEnd: number; seg: LinkedTextSegment }[],
+): LinkedText {
+  const segments: LinkedText = [];
+  let cursor = 0;
+  for (const loc of locations) {
+    if (loc.textStart > cursor) {
+      segments.push({ kind: "text", text: text.slice(cursor, loc.textStart) });
+    }
+    segments.push(loc.seg);
+    cursor = loc.textEnd;
+  }
+  if (cursor < text.length) {
+    segments.push({ kind: "text", text: text.slice(cursor) });
+  }
+  return segments;
 }
-
-// ---------------------------------------------------------------------------
-// Location parsing and conversion in text strings
-// ---------------------------------------------------------------------------
 
 /**
  * Parse all full-path locations in a text string and convert their Agda
@@ -212,76 +264,20 @@ export async function parseLocationsInString(
     }
   }
 
-  // Collect parsed locations with their text positions
-  const locations: {
-    start: number; // offset in original text
-    end: number;
-    seg: LinkedTextSegment; // the location segment to emit
-  }[] = [];
+  const matches = findLocationsInString(text, version);
 
-  const locationRe = buildLocationRegex(version);
-  let match: RegExpExecArray | null;
-  while ((match = locationRe.exec(text)) !== null) {
-    const filepath = match[1];
-    const line = Number(match[2]);
-    const col = Number(match[3]);
-    const end1 = Number(match[4]); // always present (RANGE requires it)
-    const end2 = match[5] ? Number(match[5]) : undefined;
-
-    const doc = await getDoc(filepath);
+  const resolved: { textStart: number; textEnd: number; seg: LinkedTextSegment }[] = [];
+  for (const loc of matches) {
+    const doc = await getDoc(loc.filepath);
     if (!doc) {
-      // Can't open the file -- record the location but mark position as unknown
-      locations.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        seg: { kind: "location", filepath },
-      });
+      resolved.push({ textStart: loc.textStart, textEnd: loc.textEnd, seg: { kind: "unresolved-location", filepath: loc.filepath } });
       continue;
     }
-
-    const lineText = getLineText(doc, line);
-    const newCol = agdaColToVscodeCol(lineText, col);
-
-    if (end2 !== undefined) {
-      // Multi-line: line,col-endLine,endCol
-      const endLineText = getLineText(doc, end1);
-      const newEnd2 = agdaColToVscodeCol(endLineText, end2);
-      locations.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        seg: { kind: "location", filepath, line, col: newCol, endLine: end1, endCol: newEnd2 },
-      });
-    } else {
-      // Single-line: line,col-endCol
-      const newEnd1 = agdaColToVscodeCol(lineText, end1);
-      locations.push({
-        start: match.index,
-        end: match.index + match[0].length,
-        seg: { kind: "location", filepath, line, col: newCol, endCol: newEnd1 },
-      });
-    }
+    resolved.push({ textStart: loc.textStart, textEnd: loc.textEnd, seg: convertLocation(loc, lineGetterFromDocument(doc)) });
   }
 
-  // Build LinkedText from plain-text gaps and location segments
-  const segments: LinkedText = [];
-  let cursor = 0;
-  for (const loc of locations) {
-    if (loc.start > cursor) {
-      segments.push({ kind: "text", text: text.slice(cursor, loc.start) });
-    }
-    segments.push(loc.seg);
-    cursor = loc.end;
-  }
-  if (cursor < text.length) {
-    segments.push({ kind: "text", text: text.slice(cursor) });
-  }
-
-  return segments;
+  return assembleLinkedText(text, resolved);
 }
-
-// ---------------------------------------------------------------------------
-// DisplayInfo conversion
-// ---------------------------------------------------------------------------
 
 /**
  * Convert a DisplayInfo from Agda code-point columns to VS Code UTF-16

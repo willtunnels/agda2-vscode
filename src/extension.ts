@@ -155,24 +155,26 @@ export function activate(context: vscode.ExtensionContext): void {
         // Highlighting always adjusts per-change (it just shifts/removes)
         highlighting.adjustForEdits(uri, e.contentChanges);
 
-        // Goal adjustment: collate undo/redo changes into a single merged edit
-        const reason = (e as any).reason as TextDocumentChangeReason | undefined;
-        const isNativeUndoRedo =
-          reason === TextDocumentChangeReason.Undo || reason === TextDocumentChangeReason.Redo;
+        // Goal adjustment: collate undo changes into a single merged edit
+        const goalChanges = (() => {
+          const isCollatingUndo = goals.isCollatingUndo(uri);
+          if (isCollatingUndo) return null;
 
-        if (goals.isCollatingUndo(uri)) {
-          // VSCodeVim undo -- skip goal adjustment; collation handled by
-          // agda.vimUndo setTimeout callback.
-        } else if (isNativeUndoRedo && e.contentChanges.length > 1) {
-          const postText = e.document.getText();
-          const preText = reconstructPreText(postText, e.contentChanges);
-          const merged = computeSingleChange(preText, postText, true);
-          if (merged) {
-            goals.adjustForEdits(uri, [merged]);
+          const reason = (e as any).reason as TextDocumentChangeReason | undefined;
+          const isNativeUndo = reason === TextDocumentChangeReason.Undo;
+
+          if (isNativeUndo && e.contentChanges.length > 1) {
+            const postText = e.document.getText();
+            const preText = reconstructPreText(postText, e.contentChanges);
+            const merged = computeSingleChange(preText, postText, true);
+            return merged ? [merged] : null;
           }
-        } else {
-          // Normal edit (or single-change undo) -- process directly
-          goals.adjustForEdits(uri, e.contentChanges);
+
+          return e.contentChanges;
+        })();
+
+        if (goalChanges) {
+          goals.adjustForEdits(uri, goalChanges);
         }
 
         for (const editor of vscode.window.visibleTextEditors) {

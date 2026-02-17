@@ -27,11 +27,6 @@ import {
   workspace,
 } from "vscode";
 
-// --- Operation queue types ---
-
-/**
- * All operations the rewriter can perform.
- */
 type QueuedOp =
   | { kind: "change"; changes: Change[] }
   | { kind: "selection"; selections: Range[] }
@@ -39,7 +34,16 @@ type QueuedOp =
   | { kind: "replaceAll" };
 
 /**
- * Tracks abbreviations in a given text editor and replaces them dynamically.
+ * VS Code adapter for {@link AbbreviationRewriter}.
+ *
+ * Handles two concerns:
+ *   1. **Re-entrant edit events** — `workspace.applyEdit()` fires a
+ *      synchronous `onDidChangeTextDocument` for our own edit, which
+ *      must be suppressed.
+ *   2. **Serialization** — all event operations (text changes, selection
+ *      changes, cycling, replaceAll) must be serialized through a
+ *      single queue, lest some internal yield point allow them to
+ *      interleave in undesirable ways.
  */
 export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   private readonly disposables = new Array<Disposable>();
@@ -56,39 +60,19 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   });
 
   /**
-   * True while we are inside a workspace.applyEdit() call.
-   *
-   * During applyEdit, VS Code fires a re-entrant onDidChangeTextDocument
-   * for our own edit. That event must be skipped -- if the engine saw it,
-   * processChange would see an overlapping edit and kill the tracked
-   * abbreviation before enterReplacedState/updateRangeAfterCycleEdit runs.
-   *
-   * In VS Code Remote, applyEdit involves IPC and takes multiple event-loop
-   * turns. The first event during isApplyingEdit is assumed to be the
-   * re-entrant event and is skipped. Any additional events are buffered
-   * in `eventsBufferedDuringEdit` and replayed after the edit completes.
+   * Re-entrant edit guard. While true:
+   *   - The first `onDidChangeTextDocument` event is our own edit — skip it.
+   *   - Subsequent events are real user keystrokes (possible in VS Code
+   *     Remote due to IPC latency) — buffer them for replay.
    */
   private isApplyingEdit = false;
-
-  /** Whether we've already seen (and skipped) the re-entrant event. */
   private seenReentrantEvent = false;
-
-  /** Events that arrived during isApplyingEdit after the re-entrant one. */
   private eventsBufferedDuringEdit: Change[][] = [];
 
-  /**
-   * Unified operation queue. ALL interactions with the engine
-   * (text changes, selection changes, Tab/Shift+Tab cycling, replaceAll)
-   * are serialized through this queue so that at most one async engine
-   * operation is in-flight at any time.
-   */
+  /** Operation queue (see class doc). */
   private opQueue: QueuedOp[] = [];
 
-  /**
-   * Non-null while a drain loop is running. Serves two purposes:
-   *   1. Reentrancy guard -- drainQueue() is a no-op if already set.
-   *   2. Awaitable by flush() to wait for the queue to empty.
-   */
+  /** Non-null while draining. Reentrancy guard + awaitable by {@link flush}. */
   private drainPromise: Promise<void> | null = null;
 
   constructor(
@@ -108,22 +92,17 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
           return;
         }
 
-        const changes: Change[] = e.contentChanges.map((changeEvent) => ({
-          range: new Range(changeEvent.rangeOffset, changeEvent.rangeLength),
-          newText: changeEvent.text,
+        const changes: Change[] = e.contentChanges.map((c) => ({
+          range: new Range(c.rangeOffset, c.rangeLength),
+          newText: c.text,
         }));
 
         if (this.isApplyingEdit) {
           if (!this.seenReentrantEvent) {
-            // First event during our applyEdit -- this is the
-            // re-entrant notification for our own edit. Skip it.
             this.seenReentrantEvent = true;
-            return;
+            return; // Our own edit — skip.
           }
-          // Additional events during applyEdit are real user
-          // keystrokes that arrived while the edit was in flight
-          // (common in VS Code Remote due to IPC latency).
-          this.eventsBufferedDuringEdit.push(changes);
+          this.eventsBufferedDuringEdit.push(changes); // Real keystroke — buffer.
           return;
         }
 
@@ -154,10 +133,8 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
 
   /**
    * Apply abbreviation replacements to the document.
-   *
-   * Uses workspace.applyEdit() instead of textEditor.edit() deliberately:
-   * textEditor.edit() has an internal retry loop ($tryApplyEdits →
-   * acceptModelChanged → retry) that can amplify edits in VS Code Remote.
+   * Uses `workspace.applyEdit()` — `textEditor.edit()` has an internal
+   * retry loop that can amplify edits in VS Code Remote.
    */
   async replaceAbbreviations(changes: Change[]): Promise<boolean> {
     try {
@@ -189,17 +166,12 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
     return false;
   }
 
-  /**
-   * Move events buffered during isApplyingEdit into the operation queue.
-   */
+  /** Move events buffered during isApplyingEdit into the operation queue. */
   private replayBufferedEvents(): void {
     for (const changes of this.eventsBufferedDuringEdit) {
       this.opQueue.push({ kind: "change", changes });
     }
     this.eventsBufferedDuringEdit = [];
-    // Kick a drain in case nobody else will (e.g. replaceAbbreviations
-    // was called from cycleAbbreviations or changeSelections, not from
-    // the drain loop).
     this.drainQueue();
   }
 
@@ -226,13 +198,8 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
         break;
 
       case "selection":
-        // Read CURRENT live selections rather than the potentially-stale
-        // offsets captured when the event was enqueued. The document may
-        // have changed between enqueue time and processing time -- e.g.,
-        // an eager replacement in a preceding change op shrinks `\t` to
-        // `◂`, but the selection event still carries the pre-replacement
-        // cursor offset. Using live positions avoids killing the
-        // abbreviation with a stale offset.
+        // Use live selections — preceding ops may have changed the document
+        // since this event was enqueued, making the captured offsets stale.
         {
           const liveSelections = this.collectSelections();
           await this.rewriter.changeSelections(liveSelections);
@@ -297,17 +264,12 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   private updateState() {
     const trackedAbbreviations = this.rewriter.getTrackedAbbreviations();
 
+    const doc = this.textEditor.document;
     const typingRanges: LineColRange[] = [];
     const cyclingRanges: LineColRange[] = [];
-
     for (const a of trackedAbbreviations) {
-      if (a.isReplaced) {
-        cyclingRanges.push(toVsCodeRange(a.range, this.textEditor.document));
-      } else {
-        typingRanges.push(toVsCodeRange(a.range, this.textEditor.document));
-      }
+      (a.isReplaced ? cyclingRanges : typingRanges).push(toVsCodeRange(a.range, doc));
     }
-
     this.textEditor.setDecorations(this.typingDecorationType, typingRanges);
     this.textEditor.setDecorations(this.cyclingDecorationType, cyclingRanges);
 
@@ -342,20 +304,31 @@ export function updateAbbreviationStatusBar(
   trackedAbbreviations: Set<TrackedAbbreviation>,
   statusBarItem: StatusBarItem,
 ): void {
-  if (trackedAbbreviations.size === 0) {
+  const text = formatAbbreviationStatusBar(leader, trackedAbbreviations);
+  if (text === null) {
     statusBarItem.hide();
-    return;
+  } else {
+    statusBarItem.text = text;
+    statusBarItem.show();
   }
-  const abbr = [...trackedAbbreviations][0];
+}
+
+/**
+ * Compute the status bar text for abbreviation state. Returns null to hide.
+ */
+export function formatAbbreviationStatusBar(
+  leader: string,
+  tracked: ReadonlySet<TrackedAbbreviation>,
+): string | null {
+  if (tracked.size === 0) return null;
+  const abbr = [...tracked][0];
   if (abbr.isReplaced) {
     const symbols = abbr.cycleSymbols;
     const idx = abbr.cycleIndex;
     const symbolList = symbols.map((s, i) => (i === idx ? `[ ${s} ]` : s)).join("  ");
-    statusBarItem.text = `${leader}${abbr.abbreviation}  ${symbolList}`;
-  } else {
-    statusBarItem.text = `${leader}${abbr.abbreviation}`;
+    return `${leader}${abbr.abbreviation}  ${symbolList}`;
   }
-  statusBarItem.show();
+  return `${leader}${abbr.abbreviation}`;
 }
 
 function fromVsCodeRange(range: LineColRange, doc: TextDocument): Range {

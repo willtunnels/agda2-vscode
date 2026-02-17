@@ -22,7 +22,7 @@ import { agdaHighlightRangeToVscode } from "../util/position.js";
 
 // --- Stored entry ---
 
-interface StoredEntry {
+export interface StoredEntry {
   range: vscode.Range;
   atoms: string[];
   definitionSite: DefinitionSite | null;
@@ -134,7 +134,7 @@ const DECORATION_STYLES: Record<string, vscode.DecorationRenderOptions> = {
 
 // --- Semantic token helpers ---
 
-interface SemanticToken {
+export interface SemanticToken {
   line: number;
   startChar: number;
   length: number;
@@ -166,6 +166,102 @@ function consumeMatchingExpansion(pending: vscode.Range[], editRange: vscode.Ran
     }
   }
   return false;
+}
+
+/**
+ * Generate semantic tokens from stored entries, splitting multi-line ranges.
+ */
+function generateSemanticTokens(
+  entries: readonly StoredEntry[],
+  lineLength: (line: number) => number,
+): SemanticToken[] {
+  const tokens: SemanticToken[] = [];
+
+  for (const entry of entries) {
+    const typeIdx = getTokenTypeIndex(entry.atoms);
+    if (typeIdx < 0) continue;
+
+    const { start, end } = entry.range;
+    if (start.line === end.line) {
+      const length = end.character - start.character;
+      if (length > 0) {
+        tokens.push({ line: start.line, startChar: start.character, length, typeIdx });
+      }
+    } else {
+      const firstLineLen = lineLength(start.line) - start.character;
+      if (firstLineLen > 0) {
+        tokens.push({ line: start.line, startChar: start.character, length: firstLineLen, typeIdx });
+      }
+      for (let line = start.line + 1; line < end.line; line++) {
+        const len = lineLength(line);
+        if (len > 0) {
+          tokens.push({ line, startChar: 0, length: len, typeIdx });
+        }
+      }
+      if (end.character > 0) {
+        tokens.push({ line: end.line, startChar: 0, length: end.character, typeIdx });
+      }
+    }
+  }
+
+  return tokens;
+}
+
+/**
+ * Group entries by decoration atom. Returns a map from atom name to the
+ * ranges that should receive that decoration.
+ */
+function groupDecorationRanges(
+  entries: readonly StoredEntry[],
+  knownAtoms: ReadonlySet<string>,
+): Map<string, vscode.Range[]> {
+  const groups = new Map<string, vscode.Range[]>();
+  for (const entry of entries) {
+    for (const atom of entry.atoms) {
+      if (!knownAtoms.has(atom)) continue;
+      let ranges = groups.get(atom);
+      if (!ranges) {
+        ranges = [];
+        groups.set(atom, ranges);
+      }
+      ranges.push(entry.range);
+    }
+  }
+  return groups;
+}
+
+/**
+ * The core logic of adjustForEdits: for each change, either expand intersecting entry ranges (if
+ * there is a pending expansion) or remove entries with intersecting ranges (for all other edits).
+ * 
+ * Mutates `entries` and `pendingExpansions`.
+ */
+function adjustEntries(
+  entries: StoredEntry[],
+  pendingExpansions: vscode.Range[],
+  changes: readonly vscode.TextDocumentContentChangeEvent[],
+): void {
+  for (const edit of processChanges(changes)) {
+    const isExpansion = pendingExpansions.length > 0
+      ? consumeMatchingExpansion(pendingExpansions, edit.editRange)
+      : false;
+
+    for (let i = entries.length - 1; i >= 0; i--) {
+      if (isExpansion) {
+        const expanded = expandRange(entries[i].range, edit);
+        if (expanded !== entries[i].range) {
+          entries[i] = { ...entries[i], range: expanded };
+        }
+      } else {
+        const adjusted = adjustRange(entries[i].range, edit);
+        if (adjusted) {
+          entries[i] = { ...entries[i], range: adjusted };
+        } else {
+          entries.splice(i, 1);
+        }
+      }
+    }
+  }
 }
 
 // --- Manager ---
@@ -246,20 +342,8 @@ export class HighlightingManager
   private applyDecorations(editor: vscode.TextEditor): void {
     const uri = editor.document.uri.toString();
     const entries = this.entriesByUri.get(uri) ?? [];
-
-    // Group ranges by decoration atom
-    const groups = new Map<string, vscode.Range[]>();
-    for (const entry of entries) {
-      for (const atom of entry.atoms) {
-        if (!this.decorationTypes.has(atom)) continue;
-        let ranges = groups.get(atom);
-        if (!ranges) {
-          ranges = [];
-          groups.set(atom, ranges);
-        }
-        ranges.push(entry.range);
-      }
-    }
+    const knownAtoms = new Set(this.decorationTypes.keys());
+    const groups = groupDecorationRanges(entries, knownAtoms);
 
     // Apply -- set empty ranges for unused types to clear stale decorations
     for (const [atom, decorationType] of this.decorationTypes) {
@@ -290,41 +374,10 @@ export class HighlightingManager
     const builder = new vscode.SemanticTokensBuilder(SEMANTIC_LEGEND);
 
     if (entries) {
-      // Collect tokens, splitting multi-line ranges
-      const tokens: SemanticToken[] = [];
-
-      for (const entry of entries) {
-        const typeIdx = getTokenTypeIndex(entry.atoms);
-        if (typeIdx < 0) continue;
-
-        const { start, end } = entry.range;
-        if (start.line === end.line) {
-          const length = end.character - start.character;
-          if (length > 0) {
-            tokens.push({ line: start.line, startChar: start.character, length, typeIdx });
-          }
-        } else {
-          // Multi-line: split into one token per line
-          const firstLineLen = document.lineAt(start.line).text.length - start.character;
-          if (firstLineLen > 0) {
-            tokens.push({
-              line: start.line,
-              startChar: start.character,
-              length: firstLineLen,
-              typeIdx,
-            });
-          }
-          for (let line = start.line + 1; line < end.line; line++) {
-            const lineLen = document.lineAt(line).text.length;
-            if (lineLen > 0) {
-              tokens.push({ line, startChar: 0, length: lineLen, typeIdx });
-            }
-          }
-          if (end.character > 0) {
-            tokens.push({ line: end.line, startChar: 0, length: end.character, typeIdx });
-          }
-        }
-      }
+      const tokens = generateSemanticTokens(
+        entries,
+        (line) => document.lineAt(line).text.length,
+      );
 
       // Sort by position (required by the builder)
       tokens.sort((a, b) => (a.line !== b.line ? a.line - b.line : a.startChar - b.startChar));
@@ -412,30 +465,11 @@ export class HighlightingManager
     const entries = this.entriesByUri.get(uri);
     if (!entries) return;
 
-    const pending = this.pendingExpansions.get(uri);
-
-    for (const edit of processChanges(changes)) {
-      const isExpansion = pending ? consumeMatchingExpansion(pending, edit.editRange) : false;
-
-      for (let i = entries.length - 1; i >= 0; i--) {
-        if (isExpansion) {
-          const expanded = expandRange(entries[i].range, edit);
-          if (expanded !== entries[i].range) {
-            entries[i] = { ...entries[i], range: expanded };
-          }
-        } else {
-          const adjusted = adjustRange(entries[i].range, edit);
-          if (adjusted) {
-            entries[i] = { ...entries[i], range: adjusted };
-          } else {
-            entries.splice(i, 1);
-          }
-        }
-      }
-    }
+    const pending = this.pendingExpansions.get(uri) ?? [];
+    adjustEntries(entries, pending, changes);
 
     // Clean up empty pending sets
-    if (pending && pending.length === 0) {
+    if (pending.length === 0) {
       this.pendingExpansions.delete(uri);
     }
 

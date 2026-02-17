@@ -237,7 +237,7 @@ function renderLinkedText(lt: LinkedText, version: AgdaVersion): RawHtml {
   return raw(
     lt
       .map((seg) => {
-        if (seg.kind === "location" && isResolvedLocation(seg)) {
+        if (isResolvedLocation(seg)) {
           const data = esc(
             JSON.stringify({ filepath: seg.filepath, line: seg.line, col: seg.col }),
           );

@@ -34,12 +34,24 @@ interface CycleInfo {
   newText: string;
 }
 
+/**
+ * Platform-independent state machine for abbreviation tracking and replacement.
+ *
+ * Each abbreviation goes through two phases:
+ *   1. **Typing** — the user is building `\text` character by character.
+ *   2. **Replaced / cycling** — `\text` has been eagerly replaced with a
+ *      symbol; Tab/Shift+Tab cycles through alternatives.
+ *
+ * All actual document edits are delegated to an {@link AbbreviationTextSource}.
+ * The caller is responsible for feeding document changes into
+ * {@link changeInput}, flushing deferred ops ({@link flushPendingOps}),
+ * and triggering eager replacement ({@link triggerAbbreviationReplacement}).
+ */
 export class AbbreviationRewriter {
-  /**
-   * All tracked abbreviations are disjoint.
-   */
+  /** All tracked abbreviations (disjoint ranges). */
   private readonly trackedAbbreviations = new Set<TrackedAbbreviation>();
 
+  /** Set during our own edits so the engine doesn't track replacement text as a new `\`. */
   private doNotTrackNewAbbr = false;
 
   /**
@@ -49,13 +61,8 @@ export class AbbreviationRewriter {
   private readonly _finishedAbbreviations = new Set<TrackedAbbreviation>();
 
   /**
-   * Deferred extend/shorten operations queued during processChange.
-   * These are NOT started immediately -- they are executed sequentially
-   * by flushPendingOps(). This is critical for multi-cursor: when
-   * changeInput processes multiple changes in one batch, earlier
-   * processChange calls may shift abbreviation ranges that later
-   * doShorten/doExtend calls need to read. By deferring execution,
-   * each operation reads the range AFTER all batch adjustments.
+   * Extend/shorten ops deferred during {@link changeInput} so that abbreviations are not modified
+   * while processing a batch of changes.
    */
   private _pendingOps: (() => Promise<void>)[] = [];
 
@@ -82,15 +89,12 @@ export class AbbreviationRewriter {
    *   (even if longer abbreviations exist).
    */
   async triggerAbbreviationReplacement() {
-    // Finished abbreviations (non-matching char typed) -- always finalize
     const finished = [...this._finishedAbbreviations];
     this._finishedAbbreviations.clear();
     if (finished.length > 0) {
       await this.forceReplace(finished);
     }
 
-    // Eager replacement: complete abbreviations that are still in typing mode
-    // → replace with first symbol and enter cycling mode (stay tracked)
     const complete = [...this.trackedAbbreviations].filter(
       (abbr) =>
         !abbr.isReplaced &&
@@ -101,6 +105,7 @@ export class AbbreviationRewriter {
     }
   }
 
+  /** Finalize any tracked abbreviation that no longer contains a cursor. */
   async changeSelections(selections: Range[]) {
     await this.forceReplace(
       [...this.trackedAbbreviations].filter(
@@ -109,6 +114,7 @@ export class AbbreviationRewriter {
     );
   }
 
+  /** Finalize all tracked abbreviations (used on dispose, editor switch, etc.). */
   async replaceAllTrackedAbbreviations() {
     await this.forceReplace([...this.trackedAbbreviations]);
   }
@@ -274,13 +280,8 @@ export class AbbreviationRewriter {
   }
 
   /**
-   * Apply a single-change edit and shift all OTHER tracked abbreviation
-   * ranges by the document delta. This is necessary because the
-   * re-entrant onDidChangeTextDocument from the edit is suppressed by
-   * the VS Code layer, so the engine never sees the shift.
-   *
-   * Without this, sequential doExtend/doShorten calls in multi-cursor
-   * scenarios would use stale offsets for the second abbreviation.
+   * Apply a single edit and manually shift other abbreviations' ranges,
+   * since the re-entrant event from this edit is suppressed by the caller.
    */
   private async applyEditAndShiftOthers(
     editedAbbr: TrackedAbbreviation,
@@ -374,12 +375,6 @@ export class AbbreviationRewriter {
       }
 
       const changes = this.computeReplacementChanges(needsReplace);
-
-      // If no abbreviation produced a replacement (e.g. empty text after
-      // bare `\`), just remove from tracking. Calling replaceAbbreviations
-      // with an empty change list would trigger the isApplyingEdit guard
-      // with no reentrant event to absorb, causing the next real keystroke
-      // to be silently skipped.
       if (changes.length === 0) return;
 
       const ok = await this.replaceAbbreviations(changes);
@@ -404,6 +399,10 @@ export class AbbreviationRewriter {
     return changes;
   }
 
+  /**
+   * Process a single document change against all tracked abbreviations.
+   * A `\` that doesn't overlap any existing abbreviation starts a new one.
+   */
   private processChange(c: Change): void {
     let isAnyTrackedAbbrAffected = false;
     for (const abbr of [...this.trackedAbbreviations]) {
@@ -416,15 +415,14 @@ export class AbbreviationRewriter {
           break;
         case "updated":
           isAnyTrackedAbbrAffected = true;
-          // If this abbreviation was previously marked finished by an
-          // earlier change in the same batch, a subsequent edit inside
-          // its range overrides that.
+          // Earlier change in same batch may have marked this finished; override.
           this._finishedAbbreviations.delete(abbr);
           break;
         case "appended":
           if (
             this.abbreviationProvider.hasAbbreviationsWithPrefix(abbr.abbreviation + result.text)
           ) {
+            // Extends a known prefix — keep tracking.
             isAnyTrackedAbbrAffected = true;
             if (abbr.isReplaced) {
               this._pendingOps.push(() => this.doExtend(abbr, result.text));
@@ -432,8 +430,10 @@ export class AbbreviationRewriter {
               abbr.acceptAppend(result.text);
             }
           } else if (abbr.isReplaced) {
+            // Non-extending char after a symbol — done.
             this.removeFromTracking(abbr);
           } else {
+            // Non-extending char in typing mode — mark for finalization.
             this._finishedAbbreviations.add(abbr);
           }
           break;

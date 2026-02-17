@@ -1,3 +1,8 @@
+/**
+ * A `showInputBox` wrapper that runs the abbreviation engine against InputBox
+ * text, so `\to` → `→` works in input boxes the same way as in the editor.
+ */
+
 import * as vscode from "vscode";
 import {
   AbbreviationRewriter,
@@ -10,14 +15,9 @@ import * as config from "../util/config.js";
 import { updateAbbreviationStatusBar } from "../unicode/VSCodeAbbreviationRewriter.js";
 import { commonPrefixSuffix } from "../util/editAdjust.js";
 
-// ---------------------------------------------------------------------------
-// Change detection
-// ---------------------------------------------------------------------------
-
 /**
  * Compute a single Change from an old/new string pair using common
- * prefix/suffix matching. Handles insertions, deletions, replacements,
- * and pastes uniformly.
+ * prefix/suffix matching.
  */
 export function computeChanges(oldValue: string, newValue: string): Change[] {
   if (oldValue === newValue) return [];
@@ -29,10 +29,7 @@ export function computeChanges(oldValue: string, newValue: string): Change[] {
   return [{ range: new Range(prefix, oldMiddleLen), newText: newMiddle }];
 }
 
-// ---------------------------------------------------------------------------
-// InputBox text source
-// ---------------------------------------------------------------------------
-
+/** AbbreviationTextSource backed by an InputBox value string. Edits are synchronous. */
 class InputBoxTextSource implements AbbreviationTextSource {
   text = "";
   isApplyingEdit = false;
@@ -66,15 +63,7 @@ class InputBoxTextSource implements AbbreviationTextSource {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Operation queue
-// ---------------------------------------------------------------------------
-
 type QueuedOp = { kind: "change"; changes: Change[] } | { kind: "cycle"; direction: 1 | -1 };
-
-// ---------------------------------------------------------------------------
-// showUnicodeInputBox
-// ---------------------------------------------------------------------------
 
 export function showUnicodeInputBox(
   provider: AbbreviationProvider,
@@ -111,13 +100,9 @@ export function showUnicodeInputBox(
           const op = opQueue.shift()!;
           if (op.kind === "change") {
             rewriter.changeInput(op.changes);
-            // Only flush pending ops and trigger replacement when no
-            // more change ops follow. When multiple keystrokes fire
-            // synchronously (fast typing), their changes are all queued
-            // before the drain starts. Triggering replacement after an
-            // intermediate character (e.g. `\t` in `\to`) would modify
-            // textSource.text out from under the remaining queued changes
-            // whose offsets were computed against the original text.
+            // Defer replacement until the last change in a consecutive run —
+            // fast typing queues multiple changes whose offsets assume the
+            // original text.
             const nextIsChange = opQueue.length > 0 && opQueue[0].kind === "change";
             if (!nextIsChange) {
               await rewriter.flushPendingOps();
@@ -137,8 +122,6 @@ export function showUnicodeInputBox(
       updateAbbreviationStatusBar(leader, rewriter.getTrackedAbbreviations(), statusBarItem);
     }
 
-    // --- Context variable + cycle commands ---
-
     void vscode.commands.executeCommand("setContext", "agda.inputBox.isActive", true);
 
     const cycleForwardDisposable = vscode.commands.registerCommand(
@@ -149,8 +132,6 @@ export function showUnicodeInputBox(
       "agda.inputBox.cycleBackward",
       () => enqueueOp({ kind: "cycle", direction: -1 }),
     );
-
-    // --- Event handlers ---
 
     function doResolve(value: string | undefined): void {
       if (resolved) return;
@@ -164,6 +145,7 @@ export function showUnicodeInputBox(
     }
 
     inputBox.onDidChangeValue((newValue) => {
+      // Skip change events caused by our own replaceAbbreviations calls.
       if (textSource.isApplyingEdit) {
         textSource.text = newValue;
         return;

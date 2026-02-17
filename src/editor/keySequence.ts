@@ -23,25 +23,96 @@
 
 import * as vscode from "vscode";
 
-type SequenceState = "" | "leader" | "leader-m" | "leader-m-x" | "leader-m-u" | "cc-x" | "cc-u";
+type StateKind = "" | "leader" | "leader-m" | "leader-m-x" | "leader-m-u" | "cc-x" | "cc-u";
+
+interface State {
+  kind: StateKind;
+  u: number;
+}
+
+type Key = "leader" | "m" | "x" | "u" | "escape" | "cc-x" | "cc-u";
+
+type KeySequenceResult =
+  | { kind: "state"; state: State }
+  | { kind: "dispatch"; command: string; state: State };
+
+const RESET: State = { kind: "", u: 0 };
+
+/**
+ * Compute the next key sequence state from a key input.
+ */
+function nextKeySequenceState(
+  current: State,
+  input: Key,
+): KeySequenceResult {
+  switch (input) {
+    case "leader":
+      if (current.kind === "leader-m" || current.kind === "leader-m-u") {
+        return { kind: "dispatch", command: "agda.give", state: RESET };
+      }
+      return { kind: "state", state: { kind: "leader", u: 0 } };
+
+    case "m":
+      if (current.kind === "leader") {
+        return { kind: "state", state: { kind: "leader-m", u: 0 } };
+      }
+      return { kind: "state", state: RESET };
+
+    case "x":
+      if (current.kind === "leader-m") {
+        return { kind: "state", state: { kind: "leader-m-x", u: 0 } };
+      }
+      return { kind: "state", state: RESET };
+
+    case "u":
+      if (current.kind === "leader-m") {
+        return { kind: "state", state: { kind: "leader-m-u", u: 1 } };
+      }
+      if (current.kind === "leader-m-u") {
+        return {
+          kind: "state",
+          state: { kind: "leader-m-u", u: Math.min(current.u + 1, 3) },
+        };
+      }
+      return { kind: "state", state: RESET };
+
+    case "escape":
+      return { kind: "state", state: RESET };
+
+    case "cc-x":
+      return { kind: "state", state: { kind: "cc-x", u: 0 } };
+
+    case "cc-u":
+      if (current.kind === "cc-u") {
+        return {
+          kind: "state",
+          state: { kind: "cc-u", u: Math.min(current.u + 1, 3) },
+        };
+      }
+      return { kind: "state", state: { kind: "cc-u", u: 1 } };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// VSCode integration
+// ---------------------------------------------------------------------------
 
 const CONTEXT_KEY = "agda.keySequence";
 const TIMEOUT_MS = 2000;
 
-let state: SequenceState = "";
+let state: State = RESET;
 let timer: ReturnType<typeof setTimeout> | undefined;
-let universalArgCount = 0;
 
-function setState(newState: SequenceState): void {
+function applyState(newState: State): void {
   state = newState;
-  vscode.commands.executeCommand("setContext", CONTEXT_KEY, newState);
+  vscode.commands.executeCommand("setContext", CONTEXT_KEY, newState.kind);
 
   if (timer !== undefined) {
     clearTimeout(timer);
     timer = undefined;
   }
 
-  if (newState !== "") {
+  if (newState.kind !== "") {
     timer = setTimeout(() => {
       resetSequence();
     }, TIMEOUT_MS);
@@ -53,95 +124,30 @@ function setState(newState: SequenceState): void {
  * 0 means no universal argument was given.
  */
 export function getUniversalArgCount(): number {
-  return universalArgCount;
+  return state.u;
 }
 
 export function resetSequence(): void {
-  universalArgCount = 0;
-  setState("");
+  applyState(RESET);
+}
+
+function handleInput(input: Key): void {
+  const result = nextKeySequenceState(state, input);
+  applyState(result.state);
+  if (result.kind === "dispatch") {
+    vscode.commands.executeCommand(result.command);
+  }
 }
 
 export function registerKeySequenceCommands(context: vscode.ExtensionContext): void {
-  // Leader key pressed (Space). In vim normal mode, our contributes.keybinding
-  // intercepts space before VSCodeVim's type override. The leader-m/leader-m-u
-  // cases are handled by their own keybindings; this fallback covers any edge
-  // case where the command is invoked directly.
   context.subscriptions.push(
-    vscode.commands.registerCommand("agda.keySequence.leader", () => {
-      if (state === "leader-m" || state === "leader-m-u") {
-        // Leader after Leader M (or Leader M U) → give
-        vscode.commands.executeCommand("agda.give");
-        return;
-      }
-      setState("leader");
-    }),
-  );
-
-  // M pressed after Leader
-  context.subscriptions.push(
-    vscode.commands.registerCommand("agda.keySequence.m", () => {
-      if (state === "leader") {
-        setState("leader-m");
-      } else {
-        resetSequence();
-      }
-    }),
-  );
-
-  // X pressed after Leader M (for restart/abort sub-prefix)
-  context.subscriptions.push(
-    vscode.commands.registerCommand("agda.keySequence.x", () => {
-      if (state === "leader-m") {
-        setState("leader-m-x");
-      } else {
-        resetSequence();
-      }
-    }),
-  );
-
-  // U pressed after Leader M or Leader M U (universal argument prefix)
-  // Each press increments the count (capped at 3).
-  context.subscriptions.push(
-    vscode.commands.registerCommand("agda.keySequence.u", () => {
-      if (state === "leader-m") {
-        universalArgCount = 1;
-        setState("leader-m-u");
-      } else if (state === "leader-m-u") {
-        universalArgCount = Math.min(universalArgCount + 1, 3);
-        // Stay in leader-m-u; re-set to refresh timeout
-        setState("leader-m-u");
-      } else {
-        resetSequence();
-      }
-    }),
-  );
-
-  // Escape cancels
-  context.subscriptions.push(
-    vscode.commands.registerCommand("agda.keySequence.escape", () => {
-      resetSequence();
-    }),
-  );
-
-  // Ctrl+C Ctrl+X chord entry -- enters cc-x state (parallel to leader-m-x)
-  context.subscriptions.push(
-    vscode.commands.registerCommand("agda.keySequence.cc-x", () => {
-      setState("cc-x");
-    }),
-  );
-
-  // Ctrl+C Ctrl+U chord entry -- enters cc-u state (parallel to leader-m-u)
-  // with universalArgCount=1. If already in cc-u, increments the count.
-  context.subscriptions.push(
-    vscode.commands.registerCommand("agda.keySequence.cc-u", () => {
-      if (state === "cc-u") {
-        universalArgCount = Math.min(universalArgCount + 1, 3);
-        setState("cc-u");
-      } else {
-        universalArgCount = 1;
-        setState("cc-u");
-      }
-    }),
+    vscode.commands.registerCommand("agda.keySequence.leader", () => handleInput("leader")),
+    vscode.commands.registerCommand("agda.keySequence.m", () => handleInput("m")),
+    vscode.commands.registerCommand("agda.keySequence.x", () => handleInput("x")),
+    vscode.commands.registerCommand("agda.keySequence.u", () => handleInput("u")),
+    vscode.commands.registerCommand("agda.keySequence.escape", () => handleInput("escape")),
+    vscode.commands.registerCommand("agda.keySequence.cc-x", () => handleInput("cc-x")),
+    vscode.commands.registerCommand("agda.keySequence.cc-u", () => handleInput("cc-u")),
   );
 
   vscode.commands.executeCommand("setContext", CONTEXT_KEY, "");

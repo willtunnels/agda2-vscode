@@ -301,22 +301,23 @@ export class GoalManager implements vscode.Disposable {
 
   /** Apply goal decorations to an editor. */
   applyDecorations(editor: vscode.TextEditor): void {
-    const goals = this.getAll(editor.document.uri.toString());
-    const showLabels = config.getGoalLabels();
-    const decorations: vscode.DecorationOptions[] = goals.map((g) => ({
-      range: g.range,
-      ...(showLabels && {
-        renderOptions: {
-          after: {
-            contentText: `?${g.id}`,
-            color: new vscode.ThemeColor("editorCodeLens.foreground"),
-            fontStyle: "italic",
-            margin: "0 0 0 1em",
-          },
-        },
-      }),
-    }));
-    editor.setDecorations(this.goalDecorationType, decorations);
+    if (config.getGoalLabels()) {
+      const goals = this.getAll(editor.document.uri.toString());
+      const decorations = 
+      goals.map((g) => ({
+    range: g.range,
+    renderOptions: {
+      after: {
+        contentText: `?${g.id}`,
+        color: new vscode.ThemeColor("editorCodeLens.foreground"),
+        fontStyle: "italic",
+        margin: "0 0 0 1em",
+      },
+    },
+  }));
+      
+      editor.setDecorations(this.goalDecorationType, decorations);
+    }
   }
 
   /** Clear all goal decorations for a single editor. */
