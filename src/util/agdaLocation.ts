@@ -44,7 +44,7 @@ import { agdaCpOffsetToUtf16, toAgdaOffset } from "./offsets.js";
 // Represents a string that may contain file:line,col locations. Each location
 // has been parsed and its columns converted from Agda code points to VS Code
 // UTF-16. The info panel renders links from the structured data (no re-parsing
-// needed).  linkedTextToString extracts plain text for non-clickable contexts.
+// needed). linkedTextToString extracts plain text for non-clickable contexts.
 
 /** A segment of linked text -- either plain text or a clickable location. */
 export type LinkedTextSegment =

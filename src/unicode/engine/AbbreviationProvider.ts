@@ -21,7 +21,7 @@ export type ExpansionKind = "default" | "alternate";
 /**
  * Answers queries to a database of abbreviations.
  *
- * Each abbreviation maps to a list of symbols (string[]).  Single-element
+ * Each abbreviation maps to a list of symbols (string[]). Single-element
  * lists are ordinary abbreviations; multi-element lists support Tab-cycling.
  */
 export class AbbreviationProvider {

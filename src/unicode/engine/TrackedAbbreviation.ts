@@ -33,11 +33,11 @@ export type ProcessChangeResult =
  *   1. **Typing** -- the user is building the abbreviation character by character.
  *      `isReplaced === false`. The range covers `\` + abbreviation text.
  *   2. **Replaced / cycling** -- the abbreviation text has been replaced with a
- *      symbol from the cycle list.  `isReplaced === true`. The range covers the
+ *      symbol from the cycle list. `isReplaced === true`. The range covers the
  *      symbol in the document. Tab advances `cycleIndex`.
  *
  * This class is a pure position/state tracker with no dependencies on the
- * abbreviation database.  The rewriter is responsible for all provider queries.
+ * abbreviation database. The rewriter is responsible for all provider queries.
  */
 export class TrackedAbbreviation {
   /** Range of the abbreviation text (excluding the leader `\`). */
@@ -112,7 +112,7 @@ export class TrackedAbbreviation {
    * @param symbols The cycle list for the current abbreviation.
    * @param symbolRange The range of the replaced symbol in the document.
    * @param initialIndex Starting index into the cycle list (from remembered
-   *   last selection).  Defaults to 0.
+   *   last selection). Defaults to 0.
    */
   enterReplacedState(symbols: string[], symbolRange: Range, initialIndex = 0): void {
     this._cycleSymbols = symbols;

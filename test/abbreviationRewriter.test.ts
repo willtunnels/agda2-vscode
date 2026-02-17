@@ -101,7 +101,7 @@ describe("AbbreviationRewriter (core)", () => {
 
   it("backslash then space immediately finalizes (space does not extend)", async () => {
     // Regression test: the abbreviation table used to have " " → ["\u00A0"]
-    // (NBSP).  With that entry, space extended the abbreviation instead of
+    // (NBSP). With that entry, space extended the abbreviation instead of
     // finalizing, causing the underline to persist indefinitely.
     // After removing the entry, space should finalize the abbreviation
     // (no matching prefix) and leave "\ " in the document.
@@ -119,7 +119,7 @@ describe("AbbreviationRewriter (core)", () => {
     await rewriter.triggerAbbreviationReplacement();
 
     // Abbreviation text is "" (empty) -- no match, so forceReplace produces
-    // no replacement.  The abbreviation should be removed from tracking.
+    // no replacement. The abbreviation should be removed from tracking.
     expect(rewriter.getTrackedAbbreviations().size).toBe(0);
     // Document should be unchanged: "\ "
     expect(source.text).toBe("\\ ");
@@ -623,7 +623,7 @@ describe("Cycling", () => {
 
   it("without flushPendingOps, fast extend loses characters (demonstrates the bug)", async () => {
     // This test shows what happens WITHOUT flushPendingOps -- the old fire-
-    // and-forget pattern.  The second char processes against stale state.
+    // and-forget pattern. The second char processes against stale state.
     const provider = new AbbreviationProvider({
       t: ["T1", "T2"],
       to: ["→"],
@@ -639,7 +639,7 @@ describe("Cycling", () => {
 
     // Feed both events WITHOUT flushing between them.
     // The first changeInput queues a deferred doExtend for "o", but it
-    // hasn't executed yet.  The second changeInput processes "p" against
+    // hasn't executed yet. The second changeInput processes "p" against
     // the pre-extend state where abbreviation is still "t".
     source.text = "T1o";
     rewriter.changeInput([{ range: new Range(2, 0), newText: "o" }]);
@@ -801,7 +801,7 @@ describe("Cycling", () => {
 
   it("multi-cursor: distant change does not kill replaced abbreviation", async () => {
     // Regression test: a change far away from a replaced abbreviation
-    // should NOT finalize it.  Before the fix, _processChangeReplaced
+    // should NOT finalize it. Before the fix, _processChangeReplaced
     // treated ALL "after" changes as extend-or-finalize, killing the
     // abbreviation even if the change was at a different cursor position.
     const provider = new AbbreviationProvider({ to: ["→"] });
@@ -969,11 +969,11 @@ describe("Cycling", () => {
     //
     // Processing event 2: cursor at offset 2 -- which is RIGHT AFTER T1.
     // With the zero-length containsRange quirk, Range(0,2).containsRange(Range(2,0))
-    // → 0 <= 2 && 1 <= 1 → true.  So this case happens to work.
+    // → 0 <= 2 && 1 <= 1 → true. So this case happens to work.
     //
-    // But for a 1-char symbol: \t → ◂ (1 char).  Abbreviation at Range(0, 1).
+    // But for a 1-char symbol: \t → ◂ (1 char). Abbreviation at Range(0, 1).
     // Stale cursor at offset 2: Range(0,1).containsRange(Range(2,0))
-    // → 0 <= 2 && 1 <= 0 → FALSE.  Abbreviation killed!
+    // → 0 <= 2 && 1 <= 0 → FALSE. Abbreviation killed!
     //
     // This is the exact bug from the VS Code logs:
     //   after triggerRepl: tracked=[t@54+1[R]]
@@ -1004,7 +1004,7 @@ describe("Cycling", () => {
     // BUG: without the fix, the abbreviation is killed here because
     // Range(0,1).containsRange(Range(2,0)) → false (cursor past symbol end).
     // With the fix (VS Code layer reads live selections), this stale offset
-    // would never reach the engine.  At the engine level, we verify the
+    // would never reach the engine. At the engine level, we verify the
     // abbreviation SURVIVES a cursor at the correct post-replacement position.
     //
     // We can't fully test the VS Code layer fix here, but we CAN verify that

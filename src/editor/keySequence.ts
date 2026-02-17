@@ -131,7 +131,7 @@ export function registerKeySequenceCommands(context: vscode.ExtensionContext): v
   );
 
   // Ctrl+C Ctrl+U chord entry -- enters cc-u state (parallel to leader-m-u)
-  // with universalArgCount=1.  If already in cc-u, increments the count.
+  // with universalArgCount=1. If already in cc-u, increments the count.
   context.subscriptions.push(
     vscode.commands.registerCommand("agda.keySequence.cc-u", () => {
       if (state === "cc-u") {

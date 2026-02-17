@@ -114,7 +114,7 @@ export function adjustRange(range: vscode.Range, edit: EditParams): vscode.Range
  * expected behavior when the user types inside a {! !} goal.
  *
  * @param delimiterWidth The number of characters at each end of the range
- *   that form the delimiters (e.g. 2 for `{!` and `!}`).  Edits touching
+ *   that form the delimiters (e.g. 2 for `{!` and `!}`). Edits touching
  *   the delimiter characters are treated as boundary overlaps.
  *
  * Returns the adjusted range, or null if the edit overlaps a boundary
@@ -183,23 +183,6 @@ export function expandRange(range: vscode.Range, edit: EditParams): vscode.Range
 // ---------------------------------------------------------------------------
 
 /**
- * Given the full document text before and after an undo/redo operation,
- * compute a single TextDocumentContentChangeEvent that represents the
- * net effect. This collapses multiple atomic undo steps into one change
- * that correctly crosses goal boundaries (causing adjustRangeContaining
- * to remove the goal).
- *
- * When `holeAware` is true, the common prefix is shrunk to avoid hiding
- * `{!`/`!}` delimiter crossings. Without this, an undo that restores
- * `{! id ? !}` from `{!  !}` produces a minimal diff that looks like an
- * interior insertion ("id ?" between the matching `{!` and `!}`), so
- * adjustRangeContaining grows the goal instead of removing it. Shrinking
- * the prefix to before the unmatched `{!` makes the diff cross the
- * delimiter boundary.
- *
- * Returns null if the texts are identical (no change).
- */
-/**
  * Find the lengths of the longest common prefix and suffix between two
  * strings (suffix does not overlap with prefix).
  */
@@ -218,6 +201,20 @@ export function commonPrefixSuffix(a: string, b: string): { prefix: number; suff
   return { prefix, suffix };
 }
 
+/**
+ * Given the full document text before and after an undo operation, compute a single
+ * TextDocumentContentChangeEvent that represents the net effect. This collapses multiple atomic
+ * undo steps into one change that correctly crosses goal boundaries (causing adjustRangeContaining
+ * to remove the goal).
+ *
+ * When `holeAware` is true, the common prefix is shrunk to avoid hiding `{!`/`!}` delimiter
+ * crossings. Without this, an undo that restores `{! id ? !}` from `{!  !}` produces a minimal diff
+ * that looks like an interior insertion ("id ?" between the matching `{!` and `!}`), so
+ * adjustRangeContaining grows the goal instead of removing it. Shrinking the prefix to before the
+ * unmatched `{!` makes the diff cross the delimiter boundary.
+ * 
+ * Returns null if the texts are identical (no change).
+ */
 export function computeSingleChange(
   beforeText: string,
   afterText: string,

@@ -147,9 +147,9 @@ def postprocess(raw: dict) -> dict:
         # agda-input-tweak-all prepends \ to every key
         stripped = key[1:] if key.startswith("\\") else key
         if stripped and stripped.strip():
-            # Skip whitespace-only keys (e.g. " " → NBSP).  In Emacs agda-mode,
+            # Skip whitespace-only keys (e.g. " " → NBSP). In Emacs agda-mode,
             # space deactivates the input method so these are unreachable via
-            # normal typing.  In our VS Code engine, they would prevent space
+            # normal typing. In our VS Code engine, they would prevent space
             # from finalizing the abbreviation.
             cleaned[stripped] = translations
     return dict(sorted(cleaned.items()))

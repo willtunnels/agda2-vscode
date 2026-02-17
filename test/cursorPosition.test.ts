@@ -648,7 +648,7 @@ describe("Give then undo removes goal", () => {
 
   // The paren:true case has the same fundamental problem -- VS Code fires
   // 3 undo steps (one for each atomic edit in the decomposition), each
-  // individually surviving adjustRangeContaining.  We don't test the exact
+  // individually surviving adjustRangeContaining. We don't test the exact
   // decomposition here since it depends on VS Code's diff algorithm, but
   // the paren:false case above demonstrates the bug.
 });

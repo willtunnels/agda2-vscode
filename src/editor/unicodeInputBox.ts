@@ -16,7 +16,7 @@ import { commonPrefixSuffix } from "../util/editAdjust.js";
 
 /**
  * Compute a single Change from an old/new string pair using common
- * prefix/suffix matching.  Handles insertions, deletions, replacements,
+ * prefix/suffix matching. Handles insertions, deletions, replacements,
  * and pastes uniformly.
  */
 export function computeChanges(oldValue: string, newValue: string): Change[] {
@@ -112,9 +112,9 @@ export function showUnicodeInputBox(
           if (op.kind === "change") {
             rewriter.changeInput(op.changes);
             // Only flush pending ops and trigger replacement when no
-            // more change ops follow.  When multiple keystrokes fire
+            // more change ops follow. When multiple keystrokes fire
             // synchronously (fast typing), their changes are all queued
-            // before the drain starts.  Triggering replacement after an
+            // before the drain starts. Triggering replacement after an
             // intermediate character (e.g. `\t` in `\to`) would modify
             // textSource.text out from under the remaining queued changes
             // whose offsets were computed against the original text.

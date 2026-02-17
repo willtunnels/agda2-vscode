@@ -8,7 +8,7 @@
  *   thing : {!  !}       -- goal 1
  *
  * When we "give" the content of goal 0 (which is "?"), Agda responds with
- * GiveAction { str: "?" }.  The give edit replaces {! ? !} with the raw "?"
+ * GiveAction { str: "?" }. The give edit replaces {! ? !} with the raw "?"
  * (matching Agda's internal state), and the InteractionPoints handler then
  * expands lone ? marks to {!  !} using the standard load-time expansion path.
  *
@@ -17,8 +17,8 @@
  * InteractionPoints offsets (based on Agda's document where the replacement
  * was "?") then placed all subsequent goals at wrong positions.
  *
- * The fix: handleGiveAction writes the raw string.  GiveAction is processed
- * before InteractionPoints, so the document matches Agda's offsets.  The
+ * The fix: handleGiveAction writes the raw string. GiveAction is processed
+ * before InteractionPoints, so the document matches Agda's offsets. The
  * InteractionPoints handler's existing ? → {!  !} expansion then fires
  * naturally, and forceScan=true ensures goal positions are found by scanning.
  */
@@ -334,7 +334,7 @@ describe("give-with-question-mark bug", () => {
     const postGiveIPs = simulateGiveEdit(doc, uri, offsets);
 
     // After the give, Agda sends re-highlighting with offsets based on its
-    // document.  Now those offsets MATCH the VS Code document (since we
+    // document. Now those offsets MATCH the VS Code document (since we
     // wrote raw "?", not "{!  !}").
     const agdaShrink = "{! ? !}".length - "?".length;
     const agdaThingStart = thingStart + 1 - agdaShrink;

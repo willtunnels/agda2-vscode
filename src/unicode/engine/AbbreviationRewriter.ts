@@ -51,10 +51,10 @@ export class AbbreviationRewriter {
   /**
    * Deferred extend/shorten operations queued during processChange.
    * These are NOT started immediately -- they are executed sequentially
-   * by flushPendingOps().  This is critical for multi-cursor: when
+   * by flushPendingOps(). This is critical for multi-cursor: when
    * changeInput processes multiple changes in one batch, earlier
    * processChange calls may shift abbreviation ranges that later
-   * doShorten/doExtend calls need to read.  By deferring execution,
+   * doShorten/doExtend calls need to read. By deferring execution,
    * each operation reads the range AFTER all batch adjustments.
    */
   private _pendingOps: (() => Promise<void>)[] = [];
@@ -78,8 +78,8 @@ export class AbbreviationRewriter {
    * After input changes, check if any abbreviations should be replaced.
    *
    * - Finished abbreviations (non-matching char typed) are always replaced.
-   * - In eager mode, abbreviations whose text is a complete abbreviation
-   *   are replaced (even if longer abbreviations exist).
+   * - Complete abbreviations are eagerly replaced with their first symbol
+   *   (even if longer abbreviations exist).
    */
   async triggerAbbreviationReplacement() {
     // Finished abbreviations (non-matching char typed) -- always finalize
@@ -275,7 +275,7 @@ export class AbbreviationRewriter {
 
   /**
    * Apply a single-change edit and shift all OTHER tracked abbreviation
-   * ranges by the document delta.  This is necessary because the
+   * ranges by the document delta. This is necessary because the
    * re-entrant onDidChangeTextDocument from the edit is suppressed by
    * the VS Code layer, so the engine never sees the shift.
    *
@@ -376,7 +376,7 @@ export class AbbreviationRewriter {
       const changes = this.computeReplacementChanges(needsReplace);
 
       // If no abbreviation produced a replacement (e.g. empty text after
-      // bare `\`), just remove from tracking.  Calling replaceAbbreviations
+      // bare `\`), just remove from tracking. Calling replaceAbbreviations
       // with an empty change list would trigger the isApplyingEdit guard
       // with no reentrant event to absorb, causing the next real keystroke
       // to be silently skipped.

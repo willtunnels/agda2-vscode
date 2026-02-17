@@ -59,13 +59,13 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
    * True while we are inside a workspace.applyEdit() call.
    *
    * During applyEdit, VS Code fires a re-entrant onDidChangeTextDocument
-   * for our own edit.  That event must be skipped -- if the engine saw it,
+   * for our own edit. That event must be skipped -- if the engine saw it,
    * processChange would see an overlapping edit and kill the tracked
    * abbreviation before enterReplacedState/updateRangeAfterCycleEdit runs.
    *
    * In VS Code Remote, applyEdit involves IPC and takes multiple event-loop
    * turns. The first event during isApplyingEdit is assumed to be the
-   * re-entrant event and is skipped.  Any additional events are buffered
+   * re-entrant event and is skipped. Any additional events are buffered
    * in `eventsBufferedDuringEdit` and replayed after the edit completes.
    */
   private isApplyingEdit = false;
@@ -77,7 +77,7 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   private eventsBufferedDuringEdit: Change[][] = [];
 
   /**
-   * Unified operation queue.  ALL interactions with the engine
+   * Unified operation queue. ALL interactions with the engine
    * (text changes, selection changes, Tab/Shift+Tab cycling, replaceAll)
    * are serialized through this queue so that at most one async engine
    * operation is in-flight at any time.
@@ -85,7 +85,7 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   private opQueue: QueuedOp[] = [];
 
   /**
-   * Non-null while a drain loop is running.  Serves two purposes:
+   * Non-null while a drain loop is running. Serves two purposes:
    *   1. Reentrancy guard -- drainQueue() is a no-op if already set.
    *   2. Awaitable by flush() to wait for the queue to empty.
    */
@@ -116,7 +116,7 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
         if (this.isApplyingEdit) {
           if (!this.seenReentrantEvent) {
             // First event during our applyEdit -- this is the
-            // re-entrant notification for our own edit.  Skip it.
+            // re-entrant notification for our own edit. Skip it.
             this.seenReentrantEvent = true;
             return;
           }
@@ -227,11 +227,11 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
 
       case "selection":
         // Read CURRENT live selections rather than the potentially-stale
-        // offsets captured when the event was enqueued.  The document may
+        // offsets captured when the event was enqueued. The document may
         // have changed between enqueue time and processing time -- e.g.,
         // an eager replacement in a preceding change op shrinks `\t` to
         // `◂`, but the selection event still carries the pre-replacement
-        // cursor offset.  Using live positions avoids killing the
+        // cursor offset. Using live positions avoids killing the
         // abbreviation with a stale offset.
         {
           const liveSelections = this.collectSelections();

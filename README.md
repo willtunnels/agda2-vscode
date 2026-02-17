@@ -110,8 +110,8 @@ Key sequences time out after 2 seconds of inactivity.
 
 Here are some tips for interacting with Agda (these are also applicable to the Emacs `agda2-mode`):
 
-- Goals relocate as you type, but this is only best-effort because rechecking the file with Agda can be expensive. If the type of a goal seems off, try reloading (`Ctrl+C Ctrl+L` / `Leader Space L`).
-- If you run "auto" (`Ctrl+C Ctrl+A` / `Leader Space A`) and your cursor is not inside a goal, Agda will try to find a solution to every goal in the file, quickly dispatching anything trivial.
+- Goals relocate as you type, but this is only best-effort because rechecking the file with Agda can be expensive. If the type of a goal seems off, try reloading (`Ctrl+C Ctrl+L` / `Leader M L`).
+- If you run "auto" (`Ctrl+C Ctrl+A` / `Leader M A`) and your cursor is not inside a goal, Agda will try to find a solution to every goal in the file, quickly dispatching anything trivial.
 
 ## VSCodeVim
 
@@ -183,12 +183,12 @@ Hover over any Unicode character in an Agda file to see which abbreviations prod
 
 ## Comparison with `banacorn/agda2-mode-vscode`
 
-This extension is not a fork of the VSCode extension for Agda by banacorn. Its implementation is spirtually closer to Emacs `agda2-mode`. At the time of writing, `banacorn/agda2-mode-vscode` has bugs in a number of cases where we do not, e.g., certain well-typed files fail to highlight and the case split command sometimes inserts ill-formed text (of course, we do not promise our extension is bug-free). Other differences include our VSCodeVim integration, our approach to unicode input, and the look-and-feel of our info panel.
+This extension is not a fork of the VSCode extension for Agda by banacorn. Its implementation is spiritually closer to Emacs `agda2-mode`. At the time of writing, `banacorn/agda2-mode-vscode` has bugs in a number of cases where we do not, e.g., certain well-typed files fail to highlight and the case split command sometimes inserts ill-formed text (of course, we do not promise our extension is bug-free). Other differences include our VSCodeVim integration, our approach to unicode input, and the look-and-feel of our info panel.
 
 We made an effort to get the small details right, like not highlighting parentheses in comments and putting your cursor in the right place after a give or an automatic case split (even Emacs `agda2-mode` will sometimes put your cursor one past the final character of the line when the line shrinks during a give; we will not).
 
 ## On the use of AI
 
-The code in this repository was developed with the assistance of agents. Of course, AI tools are not yet sufficient to produce quality code in the absence of intervention by a knowledgable developer. Care was taken with this project (it was not "vibe coded").
+The code in this repository was developed with the assistance of agents. Of course, AI tools are not yet sufficient to produce quality code in the absence of intervention by a knowledgeable developer. Care was taken with this project (it was not "vibe coded").
 
 Contributors are welcome to use AI, but the contributions must be of quality and not so large as to be unreviewable.

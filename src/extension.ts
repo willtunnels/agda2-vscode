@@ -142,9 +142,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // change, so goals survive incorrectly. We collate undo changes into
   // a single merged edit that crosses goal boundaries.
   //
-  // - VSCodeVim: agda.vimUndo/agda.vimRedo snapshots text and sets
-  //   collation mode. Individual events skip goal adjustment; a
-  //   setTimeout(0) callback processes the merged change.
+  // - VSCodeVim: agda.vimUndo snapshots text and sets collation mode.
+  //   Individual events skip goal adjustment; a setTimeout(0) callback
+  //   processes the merged change.
   // - Native: TextDocumentChangeReason.Undo/Redo detected here. We
   //   reconstruct the pre-change text from the post-text and the content
   //   changes, then compute a single merged change.
@@ -162,7 +162,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
         if (goals.isCollatingUndo(uri)) {
           // VSCodeVim undo -- skip goal adjustment; collation handled by
-          // agda.vimUndo/agda.vimRedo setTimeout callback.
+          // agda.vimUndo setTimeout callback.
         } else if (isNativeUndoRedo && e.contentChanges.length > 1) {
           const postText = e.document.getText();
           const preText = reconstructPreText(postText, e.contentChanges);
