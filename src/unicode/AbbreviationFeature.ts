@@ -6,30 +6,40 @@
 // Modified for Agda
 
 import { AbbreviationProvider } from "./engine/AbbreviationProvider";
-import { Disposable, languages } from "vscode";
+import * as config from "../util/config";
+import { Disposable, StatusBarItem, languages } from "vscode";
 import { AbbreviationHoverProvider } from "./AbbreviationHoverProvider";
 import { AbbreviationRewriterFeature } from "./AbbreviationRewriterFeature";
-import { VSCodeAbbreviationConfig } from "./VSCodeAbbreviationConfig";
 
 export class AbbreviationFeature {
   private readonly disposables = new Array<Disposable>();
-  readonly abbreviations: AbbreviationProvider;
+  private hoverRegistration: Disposable;
 
-  constructor() {
-    const config = new VSCodeAbbreviationConfig();
-    this.disposables.push(config);
-    this.abbreviations = new AbbreviationProvider(config);
+  constructor(
+    private readonly abbreviationProvider: AbbreviationProvider,
+    statusBarItem: StatusBarItem,
+  ) {
+    this.hoverRegistration = this.registerHover();
 
     this.disposables.push(
-      languages.registerHoverProvider(
-        config.languages,
-        new AbbreviationHoverProvider(config, this.abbreviations),
-      ),
-      new AbbreviationRewriterFeature(config, this.abbreviations),
+      new AbbreviationRewriterFeature(abbreviationProvider, statusBarItem),
+
+      config.onInputLanguagesChanged(() => {
+        this.hoverRegistration.dispose();
+        this.hoverRegistration = this.registerHover();
+      }),
+    );
+  }
+
+  private registerHover(): Disposable {
+    return languages.registerHoverProvider(
+      config.getInputLanguages(),
+      new AbbreviationHoverProvider(this.abbreviationProvider),
     );
   }
 
   dispose(): void {
+    this.hoverRegistration.dispose();
     for (const d of this.disposables) {
       d.dispose();
     }

@@ -256,6 +256,16 @@
         "command": "agda.vimUndo",
         "title": "Vim Undo (with goal tracking)",
         "category": "Agda"
+      },
+      {
+        "command": "agda.inputBox.cycleForward",
+        "title": "Input Box: Cycle Abbreviation Forward",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.inputBox.cycleBackward",
+        "title": "Input Box: Cycle Abbreviation Backward",
+        "category": "Agda"
       }
     ],
     "keybindings": [
@@ -268,6 +278,16 @@
         "command": "agda.input.cycleBackward",
         "key": "shift+tab",
         "when": "editorTextFocus && editorLangId == agda && agda.input.isActive"
+      },
+      {
+        "command": "agda.inputBox.cycleForward",
+        "key": "tab",
+        "when": "inputFocus && agda.inputBox.isActive"
+      },
+      {
+        "command": "agda.inputBox.cycleBackward",
+        "key": "shift+tab",
+        "when": "inputFocus && agda.inputBox.isActive"
       },
       {
         "command": "agda.vimUndo",

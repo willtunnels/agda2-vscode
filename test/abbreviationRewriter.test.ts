@@ -5,16 +5,7 @@ import {
   Change,
 } from "../src/unicode/engine/AbbreviationRewriter";
 import { AbbreviationProvider } from "../src/unicode/engine/AbbreviationProvider";
-import type { AbbreviationConfig } from "../src/unicode/engine/AbbreviationConfig";
 import { Range } from "../src/unicode/engine/Range";
-
-function makeConfig(overrides?: Partial<AbbreviationConfig>): AbbreviationConfig {
-  return {
-    abbreviationCharacter: "\\",
-    customTranslations: {},
-    ...overrides,
-  };
-}
 
 /**
  * A mock text source that records replacement calls and manages a simple text buffer.
@@ -47,10 +38,9 @@ class MockTextSource implements AbbreviationTextSource {
 
 describe("AbbreviationRewriter (core)", () => {
   it("tracks a new abbreviation when leader is typed", () => {
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("\\");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type "\"
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -60,10 +50,9 @@ describe("AbbreviationRewriter (core)", () => {
   });
 
   it("does not track when leader is typed during replacement", async () => {
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // No abbreviation should be tracked since doNotTrackNewAbbr is internal
     // Just verify initial state
@@ -71,10 +60,9 @@ describe("AbbreviationRewriter (core)", () => {
   });
 
   it("builds abbreviation text as characters are typed", () => {
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("\\a");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type "\" at offset 0
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -87,10 +75,9 @@ describe("AbbreviationRewriter (core)", () => {
   });
 
   it("finishes abbreviation when non-matching char is typed", () => {
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("\\to ");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type "\", "t", "o"
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -118,10 +105,9 @@ describe("AbbreviationRewriter (core)", () => {
     // finalizing, causing the underline to persist indefinitely.
     // After removing the entry, space should finalize the abbreviation
     // (no matching prefix) and leave "\ " in the document.
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("\\ ");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type "\"
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -140,10 +126,9 @@ describe("AbbreviationRewriter (core)", () => {
   });
 
   it("replaces finished abbreviation via triggerAbbreviationReplacement", async () => {
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("\\to ");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -157,10 +142,9 @@ describe("AbbreviationRewriter (core)", () => {
   });
 
   it("replaces all tracked abbreviations on replaceAllTrackedAbbreviations", async () => {
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("\\to");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -173,10 +157,9 @@ describe("AbbreviationRewriter (core)", () => {
   });
 
   it("replaces abbreviation when cursor moves away", async () => {
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("\\to xyz");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -191,10 +174,9 @@ describe("AbbreviationRewriter (core)", () => {
   it("eager-replaces when abbreviation is complete (even if longer ones exist)", async () => {
     // "to" is a complete abbreviation (→) but "top" also exists.
     // With the new eager-on-any-complete behavior, \to should replace eagerly.
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("\\to");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -210,12 +192,9 @@ describe("AbbreviationRewriter (core)", () => {
   });
 
   it("supports eager replacement for unique custom abbreviation", async () => {
-    const config = makeConfig({
-      customTranslations: { zzuniq: ["Z"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ zzuniq: ["Z"] });
     const source = new MockTextSource("\\zzuniq");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "z" }]);
@@ -231,10 +210,9 @@ describe("AbbreviationRewriter (core)", () => {
   });
 
   it("resets all tracked abbreviations", () => {
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("\\a");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     expect(rewriter.getTrackedAbbreviations().size).toBe(1);
@@ -247,12 +225,9 @@ describe("AbbreviationRewriter (core)", () => {
 describe("Cycling", () => {
   it("Tab cycles through multi-symbol abbreviation", async () => {
     // Use a custom multi-symbol abbreviation for deterministic testing
-    const config = makeConfig({
-      customTranslations: { test: ["A", "B", "C"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ test: ["A", "B", "C"] });
     const source = new MockTextSource("\\test");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \test
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -287,12 +262,9 @@ describe("Cycling", () => {
   });
 
   it("Shift+Tab cycles backward", async () => {
-    const config = makeConfig({
-      customTranslations: { test: ["A", "B", "C"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ test: ["A", "B", "C"] });
     const source = new MockTextSource("\\test");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -314,12 +286,9 @@ describe("Cycling", () => {
   });
 
   it("cursor leaving finalized replaced abbreviation", async () => {
-    const config = makeConfig({
-      customTranslations: { test: ["A", "B", "C"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ test: ["A", "B", "C"] });
     const source = new MockTextSource("\\test xyz");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -341,10 +310,9 @@ describe("Cycling", () => {
   });
 
   it("single-symbol abbreviation eager-replaces and finalizes on cursor away", async () => {
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
     const source = new MockTextSource("\\to xyz");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -361,16 +329,13 @@ describe("Cycling", () => {
   it("typing after replaced symbol extends the abbreviation to a new cycle set", async () => {
     // \t eagerly replaces with first symbol of "t"'s list.
     // Typing "o" should extend to "to" and replace with →.
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1", "T2"],
-        to: ["→"],
-        top: ["⊤"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1", "T2"],
+      to: ["→"],
+      top: ["⊤"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\t");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \t
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -399,15 +364,12 @@ describe("Cycling", () => {
   it("typing after replaced symbol extends to incomplete prefix (back to typing mode)", async () => {
     // If the extended abbreviation is a valid prefix but NOT a complete abbreviation,
     // the symbol should be replaced back with \prefix (typing mode).
-    const config = makeConfig({
-      customTranslations: {
-        a: ["A1"],
-        abc: ["X"],
-      },
+    const provider = new AbbreviationProvider({
+      a: ["A1"],
+      abc: ["X"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\a");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "a" }]);
@@ -428,14 +390,11 @@ describe("Cycling", () => {
   });
 
   it("typing non-extending char after replaced symbol finalizes", async () => {
-    const config = makeConfig({
-      customTranslations: {
-        x: ["X1", "X2"],
-      },
+    const provider = new AbbreviationProvider({
+      x: ["X1", "X2"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\x");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "x" }]);
@@ -454,16 +413,13 @@ describe("Cycling", () => {
 
   it("backspace on replaced symbol shortens to shorter complete abbreviation", async () => {
     // \top → ⊤, backspace → → (shorten "top" to "to")
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1", "T2"],
-        to: ["→"],
-        top: ["⊤"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1", "T2"],
+      to: ["→"],
+      top: ["⊤"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\top");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \top
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -493,16 +449,13 @@ describe("Cycling", () => {
   });
 
   it("backspace chain: ⊤ → → → T1 → bare leader", async () => {
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1", "T2"],
-        to: ["→"],
-        top: ["⊤"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1", "T2"],
+      to: ["→"],
+      top: ["⊤"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\top");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \top and get ⊤
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -542,14 +495,11 @@ describe("Cycling", () => {
   });
 
   it("backspace on single-char abbreviation with no shorter match goes to bare leader", async () => {
-    const config = makeConfig({
-      customTranslations: {
-        x: ["X1"],
-      },
+    const provider = new AbbreviationProvider({
+      x: ["X1"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\x");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "x" }]);
@@ -570,15 +520,12 @@ describe("Cycling", () => {
 
   it("backspace to incomplete prefix goes to typing mode with leader", async () => {
     // "abc" is complete, "ab" is a valid prefix but not complete
-    const config = makeConfig({
-      customTranslations: {
-        abc: ["X"],
-        abcd: ["Y"],
-      },
+    const provider = new AbbreviationProvider({
+      abc: ["X"],
+      abcd: ["Y"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\abc");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "a" }]);
@@ -600,16 +547,13 @@ describe("Cycling", () => {
   });
 
   it("extend then shorten returns to original symbol", async () => {
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1", "T2"],
-        to: ["→"],
-        top: ["⊤"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1", "T2"],
+      to: ["→"],
+      top: ["⊤"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\to");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \to and get →
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -640,16 +584,13 @@ describe("Cycling", () => {
     // This test verifies that if we call flushPendingOps between changeInput
     // calls (as the VS Code layer's drainQueue does), extend completes before
     // the next event is processed -- preventing the fast-typing race.
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1", "T2"],
-        to: ["→"],
-        top: ["⊤"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1", "T2"],
+      to: ["→"],
+      top: ["⊤"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\t");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \t → eagerly replaced with T1
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -683,16 +624,13 @@ describe("Cycling", () => {
   it("without flushPendingOps, fast extend loses characters (demonstrates the bug)", async () => {
     // This test shows what happens WITHOUT flushPendingOps -- the old fire-
     // and-forget pattern.  The second char processes against stale state.
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1", "T2"],
-        to: ["→"],
-        top: ["⊤"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1", "T2"],
+      to: ["→"],
+      top: ["⊤"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\t");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -726,12 +664,9 @@ describe("Cycling", () => {
   it("typing after Tab cycle finalizes with current cycled symbol", async () => {
     // User types \test → A, then Tab → B, then types "x" (non-extending).
     // Should finalize with B in the document.
-    const config = makeConfig({
-      customTranslations: { test: ["A", "B", "C"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ test: ["A", "B", "C"] });
     const source = new MockTextSource("\\test");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -761,16 +696,13 @@ describe("Cycling", () => {
     // User types \top → ⊤, then Tab (if multi-symbol) or just backspace.
     // The abbreviation text is "top" regardless of which symbol is displayed.
     // Backspace should shorten "top" to "to" → →.
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1", "T2"],
-        to: ["→"],
-        top: ["⊤", "⊤2"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1", "T2"],
+      to: ["→"],
+      top: ["⊤", "⊤2"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\top");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -807,15 +739,12 @@ describe("Cycling", () => {
     // This tests that backspace on a surrogate-pair symbol works correctly
     // because VS Code deletes both surrogates at once and all range arithmetic
     // uses UTF-16 code units consistently.
-    const config = makeConfig({
-      customTranslations: {
-        B: ["\uD835\uDC01"], // 𝐁 (U+1D401, surrogate pair, .length === 2)
-        BA: ["\uD835\uDC00"], // 𝐀 (U+1D400, surrogate pair, .length === 2)
-      },
+    const provider = new AbbreviationProvider({
+      B: ["\uD835\uDC01"], // 𝐁 (U+1D401, surrogate pair, .length === 2)
+      BA: ["\uD835\uDC00"], // 𝐀 (U+1D400, surrogate pair, .length === 2)
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\BA");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \BA
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -846,13 +775,10 @@ describe("Cycling", () => {
   });
 
   it("multi-cursor: two abbreviations both eagerly replace", async () => {
-    const config = makeConfig({
-      customTranslations: { to: ["→"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ to: ["→"] });
     // Document: \to   \to    (two abbreviations at offsets 0 and 6)
     const source = new MockTextSource("\\to   \\to");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Cursor 1 types \to at offset 0
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -878,12 +804,9 @@ describe("Cycling", () => {
     // should NOT finalize it.  Before the fix, _processChangeReplaced
     // treated ALL "after" changes as extend-or-finalize, killing the
     // abbreviation even if the change was at a different cursor position.
-    const config = makeConfig({
-      customTranslations: { to: ["→"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ to: ["→"] });
     const source = new MockTextSource("\\to   \\to");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type both abbreviations
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -914,15 +837,12 @@ describe("Cycling", () => {
   });
 
   it("multi-cursor: backspace at both cursors shortens both abbreviations", async () => {
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1"],
-        to: ["→"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1"],
+      to: ["→"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\to   \\to");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type both abbreviations
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -963,15 +883,12 @@ describe("Cycling", () => {
     // doShorten(abbr2): should insert "T1" at offset 5 (= 3 + 2 shift)
     //                   → "T1 XYT1 " ← wrong without fix (inserts at 3)
     //                   → "T1 XY T1" ← correct with fix (inserts at 5)
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1"],
-        to: ["→"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1"],
+      to: ["→"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\to XY \\to");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type both abbreviations
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -1006,8 +923,7 @@ describe("Cycling", () => {
   it("real abbreviation table: \\t → ◂, then typing 'o' extends to → (\\to)", async () => {
     // Uses the real abbreviation table (no custom translations) to test
     // the exact scenario the user reports as broken.
-    const config = makeConfig();
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({});
 
     // Verify the table has what we expect
     expect(provider.getSymbolsForAbbreviation("t")?.[0]).toBe("◂");
@@ -1015,7 +931,7 @@ describe("Cycling", () => {
     expect(provider.hasAbbreviationsWithPrefix("to")).toBe(true);
 
     const source = new MockTextSource("\\t");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \t
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -1062,15 +978,12 @@ describe("Cycling", () => {
     // This is the exact bug from the VS Code logs:
     //   after triggerRepl: tracked=[t@54+1[R]]
     //   selection: @56+0 → changeSel → tracked=[]
-    const config = makeConfig({
-      customTranslations: {
-        t: ["X"], // 1-char symbol -- replacement shrinks \t from 2 to 1 char
-        to: ["→"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["X"], // 1-char symbol -- replacement shrinks \t from 2 to 1 char
+      to: ["→"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\t");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \t
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -1111,15 +1024,12 @@ describe("Cycling", () => {
   });
 
   it("correct post-replacement selection keeps abbreviation alive", async () => {
-    const config = makeConfig({
-      customTranslations: {
-        t: ["X"], // 1-char symbol
-        to: ["→"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["X"], // 1-char symbol
+      to: ["→"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\t");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -1146,15 +1056,12 @@ describe("Cycling", () => {
   });
 
   it("selection far from abbreviation kills it (cursor moved away)", async () => {
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1"],
-        to: ["→"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1"],
+      to: ["→"],
     });
-    const provider = new AbbreviationProvider(config);
     const source = new MockTextSource("\\t xyz");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -1169,14 +1076,11 @@ describe("Cycling", () => {
   });
 
   it("remembered index: next abbreviation starts from last finalized cycle index", async () => {
-    const config = makeConfig({
-      customTranslations: { test: ["A", "B", "C"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ test: ["A", "B", "C"] });
 
     // --- First abbreviation: cycle to B (index 1), then finalize ---
     const source1 = new MockTextSource("\\test");
-    const rewriter1 = new AbbreviationRewriter(config, provider, source1);
+    const rewriter1 = new AbbreviationRewriter("\\", provider, source1);
 
     rewriter1.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter1.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -1200,7 +1104,7 @@ describe("Cycling", () => {
 
     // --- Second abbreviation: should start from B (index 1) ---
     const source2 = new MockTextSource("\\test");
-    const rewriter2 = new AbbreviationRewriter(config, provider, source2);
+    const rewriter2 = new AbbreviationRewriter("\\", provider, source2);
 
     rewriter2.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter2.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -1214,12 +1118,9 @@ describe("Cycling", () => {
   });
 
   it("remembered index: finalize via non-extending char saves index", async () => {
-    const config = makeConfig({
-      customTranslations: { test: ["A", "B", "C"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ test: ["A", "B", "C"] });
     const source = new MockTextSource("\\test");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -1249,19 +1150,16 @@ describe("Cycling", () => {
   });
 
   it("remembered index: extend uses remembered index for new abbreviation", async () => {
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1", "T2", "T3"],
-        to: ["→", "⇒", "⟶"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1", "T2", "T3"],
+      to: ["→", "⇒", "⟶"],
     });
-    const provider = new AbbreviationProvider(config);
 
     // Pre-set the remembered index for "to" to 1 (⇒)
     provider.setLastSelectedIndex("to", 1);
 
     const source = new MockTextSource("\\t");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \t
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -1282,19 +1180,16 @@ describe("Cycling", () => {
   });
 
   it("remembered index: shorten uses remembered index for shorter abbreviation", async () => {
-    const config = makeConfig({
-      customTranslations: {
-        t: ["T1", "T2", "T3"],
-        to: ["→"],
-      },
+    const provider = new AbbreviationProvider({
+      t: ["T1", "T2", "T3"],
+      to: ["→"],
     });
-    const provider = new AbbreviationProvider(config);
 
     // Pre-set remembered index for "t" to 2 (T3)
     provider.setLastSelectedIndex("t", 2);
 
     const source = new MockTextSource("\\to");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     // Type \to
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
@@ -1317,12 +1212,9 @@ describe("Cycling", () => {
   });
 
   it("remembered index: replaceAll saves index before finalizing", async () => {
-    const config = makeConfig({
-      customTranslations: { test: ["A", "B", "C"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ test: ["A", "B", "C"] });
     const source = new MockTextSource("\\test");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
@@ -1348,12 +1240,9 @@ describe("Cycling", () => {
   });
 
   it("Tab on eagerly-replaced abbreviation cycles to next symbol", async () => {
-    const config = makeConfig({
-      customTranslations: { test: ["A", "B", "C"] },
-    });
-    const provider = new AbbreviationProvider(config);
+    const provider = new AbbreviationProvider({ test: ["A", "B", "C"] });
     const source = new MockTextSource("\\test");
-    const rewriter = new AbbreviationRewriter(config, provider, source);
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
 
     rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
     rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);

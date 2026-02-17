@@ -6,7 +6,6 @@
 // Modified for Agda
 
 import {
-  AbbreviationConfig,
   AbbreviationProvider,
   AbbreviationRewriter,
   AbbreviationTextSource,
@@ -93,12 +92,12 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   private drainPromise: Promise<void> | null = null;
 
   constructor(
-    readonly config: AbbreviationConfig,
+    private readonly leader: string,
     readonly abbreviationProvider: AbbreviationProvider,
     private readonly textEditor: TextEditor,
     private readonly statusBarItem: StatusBarItem,
   ) {
-    this.rewriter = new AbbreviationRewriter(config, abbreviationProvider, this);
+    this.rewriter = new AbbreviationRewriter(leader, abbreviationProvider, this);
 
     this.disposables.push(this.typingDecorationType);
     this.disposables.push(this.cyclingDecorationType);
@@ -316,32 +315,8 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
     void this.setInputActive(trackedAbbreviations.size > 0);
   }
 
-  /**
-   * Update the status bar to show the current abbreviation and symbol list.
-   *
-   * Typing mode:   `\alp`
-   * Cycling mode:  `\alpha  [ α ]  𝛼  𝛂`   (current symbol in guillemets)
-   */
   private updateStatusBar(trackedAbbreviations: Set<TrackedAbbreviation>) {
-    if (trackedAbbreviations.size === 0) {
-      this.statusBarItem.hide();
-      return;
-    }
-
-    // Use the first tracked abbreviation (multi-cursor: all share the same text)
-    const abbr = [...trackedAbbreviations][0];
-    const leader = this.config.abbreviationCharacter;
-
-    if (abbr.isReplaced) {
-      const symbols = abbr.cycleSymbols;
-      const idx = abbr.cycleIndex;
-      const symbolList = symbols.map((s, i) => (i === idx ? `[ ${s} ]` : s)).join("  ");
-      this.statusBarItem.text = `${leader}${abbr.abbreviation}  ${symbolList}`;
-    } else {
-      this.statusBarItem.text = `${leader}${abbr.abbreviation}`;
-    }
-
-    this.statusBarItem.show();
+    updateAbbreviationStatusBar(this.leader, trackedAbbreviations, this.statusBarItem);
   }
 
   private async setInputActive(isActive: boolean) {
@@ -354,6 +329,33 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
       d.dispose();
     }
   }
+}
+
+/**
+ * Update a status bar item to show the current abbreviation and symbol list.
+ *
+ * Typing mode:   `\alp`
+ * Cycling mode:  `\alpha  [ α ]  𝛼  𝛂`   (current symbol in brackets)
+ */
+export function updateAbbreviationStatusBar(
+  leader: string,
+  trackedAbbreviations: Set<TrackedAbbreviation>,
+  statusBarItem: StatusBarItem,
+): void {
+  if (trackedAbbreviations.size === 0) {
+    statusBarItem.hide();
+    return;
+  }
+  const abbr = [...trackedAbbreviations][0];
+  if (abbr.isReplaced) {
+    const symbols = abbr.cycleSymbols;
+    const idx = abbr.cycleIndex;
+    const symbolList = symbols.map((s, i) => (i === idx ? `[ ${s} ]` : s)).join("  ");
+    statusBarItem.text = `${leader}${abbr.abbreviation}  ${symbolList}`;
+  } else {
+    statusBarItem.text = `${leader}${abbr.abbreviation}`;
+  }
+  statusBarItem.show();
 }
 
 function fromVsCodeRange(range: LineColRange, doc: TextDocument): Range {

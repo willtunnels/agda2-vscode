@@ -6,16 +6,16 @@
 // Modified for Agda
 
 import { AbbreviationProvider } from "./engine/AbbreviationProvider";
+import * as config from "../util/config";
 import {
   commands,
   Disposable,
   languages,
-  StatusBarAlignment,
+  StatusBarItem,
   TextEditor,
   window,
   workspace,
 } from "vscode";
-import { VSCodeAbbreviationConfig } from "./VSCodeAbbreviationConfig";
 import { VSCodeAbbreviationRewriter } from "./VSCodeAbbreviationRewriter";
 
 /**
@@ -27,17 +27,10 @@ export class AbbreviationRewriterFeature {
 
   private activeAbbreviationRewriter: VSCodeAbbreviationRewriter | undefined;
 
-  /**
-   * Status bar item that displays the current abbreviation and cycle list.
-   * Owned by the feature (long-lived) and passed to each rewriter instance.
-   */
-  private readonly statusBarItem = window.createStatusBarItem(StatusBarAlignment.Right, 200);
-
   constructor(
-    private readonly config: VSCodeAbbreviationConfig,
     private readonly abbreviationProvider: AbbreviationProvider,
+    private readonly statusBarItem: StatusBarItem,
   ) {
-    this.disposables.push(this.statusBarItem);
     void this.changedActiveTextEditor(window.activeTextEditor);
 
     this.disposables.push(
@@ -66,7 +59,7 @@ export class AbbreviationRewriterFeature {
           this.shouldEnableRewriterForEditor(window.activeTextEditor)
         ) {
           this.activeAbbreviationRewriter = new VSCodeAbbreviationRewriter(
-            this.config,
+            config.getInputLeader(),
             this.abbreviationProvider,
             window.activeTextEditor,
             this.statusBarItem,
@@ -78,6 +71,10 @@ export class AbbreviationRewriterFeature {
           await this.disposeActiveAbbreviationRewriter();
         }
       }),
+
+      config.onInputEnabledChanged(() => this.changedActiveTextEditor(window.activeTextEditor)),
+      config.onInputLeaderChanged(() => this.changedActiveTextEditor(window.activeTextEditor)),
+      config.onInputLanguagesChanged(() => this.changedActiveTextEditor(window.activeTextEditor)),
     );
   }
 
@@ -102,7 +99,7 @@ export class AbbreviationRewriterFeature {
       return;
     }
     this.activeAbbreviationRewriter = new VSCodeAbbreviationRewriter(
-      this.config,
+      config.getInputLeader(),
       this.abbreviationProvider,
       activeTextEditor,
       this.statusBarItem,
@@ -110,10 +107,10 @@ export class AbbreviationRewriterFeature {
   }
 
   private shouldEnableRewriterForEditor(editor: TextEditor): boolean {
-    if (!this.config.inputModeEnabled) {
+    if (!config.getInputEnabled()) {
       return false;
     }
-    if (!languages.match(this.config.languages, editor.document)) {
+    if (!languages.match(config.getInputLanguages(), editor.document)) {
       return false;
     }
     return true;

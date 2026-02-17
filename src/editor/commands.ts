@@ -70,14 +70,7 @@ import {
   AGDA_INSTALL_GUIDE,
 } from "../agda/installations.js";
 import { formatVersion } from "../agda/version.js";
-import {
-  agdaConfig,
-  getAgdaPath,
-  getExtraArgs,
-  getBackend,
-  getAdditionalPaths,
-  getReloadOnGive,
-} from "../util/config.js";
+import * as config from "../util/config.js";
 import { getErrorMessage } from "../util/errorMessage.js";
 
 /** Wraps a real vscode.TextEditor to implement DocumentEditor. */
@@ -118,7 +111,9 @@ class VscodeDocumentEditor implements DocumentEditor {
   }
 }
 
-interface Services {
+export type ShowInputBox = (options: { prompt: string }) => Promise<string | undefined>;
+
+export interface Services {
   process: AgdaProcess;
   queue: CommandQueue;
   goals: GoalManager;
@@ -128,6 +123,7 @@ interface Services {
   infoPanel: InfoPanel;
   outputChannel: vscode.OutputChannel;
   globalStorageUri: vscode.Uri;
+  showInputBox: ShowInputBox;
 }
 
 /**
@@ -160,6 +156,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     infoPanel,
     outputChannel,
     globalStorageUri,
+    showInputBox,
   } = services;
 
   // ---------------------------------------------------------------------------
@@ -167,18 +164,6 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
   // ---------------------------------------------------------------------------
 
   /** Update agda.path in the most specific config scope that currently has a value. */
-  async function setAgdaPath(newPath: string): Promise<void> {
-    const config = agdaConfig();
-    const inspected = config.inspect<string>("path");
-    const target =
-      inspected?.workspaceFolderValue !== undefined
-        ? vscode.ConfigurationTarget.WorkspaceFolder
-        : inspected?.workspaceValue !== undefined
-          ? vscode.ConfigurationTarget.Workspace
-          : vscode.ConfigurationTarget.Global;
-    await config.update("path", newPath, target);
-  }
-
   async function ensureAgdaAndFile(): Promise<
     { editor: TextEditor; filepath: string } | undefined
   > {
@@ -193,7 +178,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     if (!agda.running) {
       try {
         statusBar.text = "$(loading~spin) Agda: Starting...";
-        await agda.spawn(getAgdaPath(), getExtraArgs());
+        await agda.spawn(config.getAgdaPath(), config.getExtraArgs());
         statusBar.text = "$(check) Agda";
       } catch (e) {
         const msg = getErrorMessage(e);
@@ -240,7 +225,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     highlighting.clearAll(editor);
     await editor.document.save();
     statusBar.text = "$(loading~spin) Agda: Loading...";
-    await runCommand(cmdLoad(filepath, getExtraArgs()), editor, filepath);
+    await runCommand(cmdLoad(filepath, config.getExtraArgs()), editor, filepath);
     const state = workspaceState.getOrCreate(filepath);
     state.loaded = true;
     state.dirty = false;
@@ -265,7 +250,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
   ): Promise<string | undefined> {
     const expr = goals.getGoalContent(goal, editor.document);
     if (expr) return expr;
-    return vscode.window.showInputBox({ prompt });
+    return showInputBox({ prompt });
   }
 
   /** Optional goal lookup (for maybe-toplevel commands). */
@@ -323,7 +308,6 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
   ): Promise<void> {
     const docEditor = new VscodeDocumentEditor(editor);
     const callbacks: ResponseProcessorCallbacks = {
-      reloadOnGive: getReloadOnGive(),
       registerPendingExpansions(ranges) {
         highlighting.registerPendingExpansions(editor.document.uri.toString(), ranges);
       },
@@ -659,7 +643,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
       if (expr === undefined) return;
       await runCommand(goalCmd(goal.id, expr), editor, fp);
     } else {
-      const input = await vscode.window.showInputBox({ prompt: toplevelPrompt ?? prompt });
+      const input = await showInputBox({ prompt: toplevelPrompt ?? prompt });
       if (input === undefined) return;
       await runCommand(toplevelCmd(input), editor, fp);
     }
@@ -733,7 +717,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     resetSequence();
     const ctx = await ensureAgdaAndFile();
     if (!ctx) return;
-    const input = await vscode.window.showInputBox({ prompt: "Search about" });
+    const input = await showInputBox({ prompt: "Search about" });
     if (input === undefined) return;
     await runCommand(
       cmdSearchAboutToplevel(ctx.filepath, input, rewriteFromUArg(uArg)),
@@ -749,7 +733,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     const { editor, filepath } = ctx;
 
     const BACKENDS = ["GHC", "GHCNoMain", "JS", "LaTeX", "QuickLaTeX", "HTML"] as const;
-    let backend = getBackend();
+    let backend = config.getBackend();
     if (!backend) {
       const picked = await vscode.window.showQuickPick([...BACKENDS], {
         placeHolder: "Select compilation backend",
@@ -761,7 +745,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     await editor.document.save();
     statusBar.text = `$(loading~spin) Agda: Compiling (${backend})...`;
 
-    await runCommand(cmdCompile(filepath, backend, getExtraArgs()), editor, filepath);
+    await runCommand(cmdCompile(filepath, backend, config.getExtraArgs()), editor, filepath);
   });
 
   register("agda.removeAnnotations", () => {
@@ -809,7 +793,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     try {
       statusBar.text = "$(loading~spin) Agda: Restarting...";
       queue.abort();
-      await agda.restart(getAgdaPath(), getExtraArgs());
+      await agda.restart(config.getAgdaPath(), config.getExtraArgs());
       statusBar.text = "$(check) Agda";
       vscode.window.showInformationMessage("Agda restarted");
     } catch (e) {
@@ -885,7 +869,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
       return;
     }
 
-    await setAgdaPath(binaryPath);
+    await config.setAgdaPath(binaryPath);
 
     // Kill existing process so next command uses the new binary
     if (agda.running) {
@@ -901,7 +885,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
 
   register("agda.switchAgda", async () => {
     const storageDir = globalStorageUri.fsPath;
-    const additionalPaths = getAdditionalPaths();
+    const additionalPaths = config.getAdditionalPaths();
 
     // Discover system, downloaded, additional, and well-known installs in parallel
     const [systemVersions, downloadedVersions, additionalResults, wellKnownVersions] =
@@ -990,7 +974,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
       return;
     }
 
-    await setAgdaPath(picked.agdaPath);
+    await config.setAgdaPath(picked.agdaPath);
 
     if (agda.running) {
       queue.abort();

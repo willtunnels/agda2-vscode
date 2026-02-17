@@ -6,7 +6,9 @@
 import * as vscode from "vscode";
 import type { AgdaResponse, DisplayInfo, GiveResult, Solution } from "../agda/responses.js";
 import type { AgdaOffset } from "../util/offsets.js";
+import { commonPrefixSuffix } from "../util/editAdjust.js";
 import { agdaOffsetToPosition } from "../util/position.js";
+import * as config from "../util/config.js";
 import { GoalManager, GOAL_MARKER, expandQuestionMarks } from "./goals.js";
 import type { DocumentEditor } from "./documentEditor.js";
 
@@ -48,9 +50,6 @@ export interface ResponseProcessorCallbacks {
   /** Called to store goal IDs in workspace state. */
   setGoalIds(ids: number[]): void;
 
-  /** Whether to reload after give (config setting). */
-  reloadOnGive: boolean;
-
   /** Called to trigger a full reload after give (when reloadOnGive is set). */
   reload(): Promise<void>;
 
@@ -71,7 +70,6 @@ export const noopCallbacks: ResponseProcessorCallbacks = {
   async handleSolveAll() {},
   handleJumpToError() {},
   setGoalIds() {},
-  reloadOnGive: false,
   async reload() {},
   registerPendingExpansions() {},
 };
@@ -126,7 +124,7 @@ export async function processBatchedResponses(
   // provide fresh ones.
   const willReload =
     responses.some((r) => r.kind === "MakeCase") ||
-    (callbacks.reloadOnGive && responses.some((r) => r.kind === "GiveAction"));
+    (config.getReloadOnGive() && responses.some((r) => r.kind === "GiveAction"));
 
   // GiveAction edits the document (expanding any ? in the result to {!  !}
   // first), making InteractionPoints offsets in this batch stale.
@@ -275,7 +273,7 @@ async function handleGiveAction(
     editor.selection = new vscode.Selection(restorePos, restorePos);
   }
 
-  if (callbacks.reloadOnGive) {
+  if (config.getReloadOnGive()) {
     await callbacks.reload();
     return undefined;
   }
@@ -301,16 +299,7 @@ export function mapCursorThroughEdit(
   newText: string,
   cursorOffset: number,
 ): number {
-  const minLen = Math.min(oldText.length, newText.length);
-  let prefix = 0;
-  while (prefix < minLen && oldText[prefix] === newText[prefix]) prefix++;
-
-  let suffix = 0;
-  while (
-    suffix < minLen - prefix &&
-    oldText[oldText.length - 1 - suffix] === newText[newText.length - 1 - suffix]
-  )
-    suffix++;
+  const { prefix, suffix } = commonPrefixSuffix(oldText, newText);
 
   if (cursorOffset <= prefix) return cursorOffset;
   if (cursorOffset >= oldText.length - suffix)

@@ -5,7 +5,6 @@
 // (lean4-unicode-input/src/AbbreviationRewriter.ts)
 // Modified for Agda
 
-import { AbbreviationConfig } from "./AbbreviationConfig";
 import { AbbreviationProvider } from "./AbbreviationProvider";
 import { Range } from "./Range";
 import { TrackedAbbreviation } from "./TrackedAbbreviation";
@@ -61,7 +60,7 @@ export class AbbreviationRewriter {
   private _pendingOps: (() => Promise<void>)[] = [];
 
   constructor(
-    private readonly config: AbbreviationConfig,
+    private readonly abbreviationCharacter: string,
     private readonly abbreviationProvider: AbbreviationProvider,
     private readonly textSource: AbbreviationTextSource,
   ) {}
@@ -334,7 +333,7 @@ export class AbbreviationRewriter {
         abbr.updateRangeAfterCycleEdit(new Range(replaceRange.start, newDisplay.length));
       }
     } else {
-      const leaderAndText = this.config.abbreviationCharacter + newAbbrevText;
+      const leaderAndText = this.abbreviationCharacter + newAbbrevText;
       const change: Change = { range: replaceRange, newText: leaderAndText };
       const ok = await this.applyEditAndShiftOthers(abbr, change);
       if (ok) {
@@ -446,7 +445,7 @@ export class AbbreviationRewriter {
     }
 
     if (
-      c.newText === this.config.abbreviationCharacter &&
+      c.newText === this.abbreviationCharacter &&
       !isAnyTrackedAbbrAffected &&
       !this.doNotTrackNewAbbr
     ) {

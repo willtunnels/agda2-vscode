@@ -5,7 +5,7 @@ import * as vscode from "vscode";
 import type { InteractionPointWithRange } from "../agda/responses.js";
 import { agdaOffsetToPosition } from "../util/position.js";
 import { adjustRangeContaining, adjustItems, computeSingleChange } from "../util/editAdjust.js";
-import { getGoalLabels } from "../util/config.js";
+import * as config from "../util/config.js";
 
 /** The marker text that replaces lone `?` goals during load. */
 export const GOAL_MARKER = "{!  !}";
@@ -302,7 +302,7 @@ export class GoalManager implements vscode.Disposable {
   /** Apply goal decorations to an editor. */
   applyDecorations(editor: vscode.TextEditor): void {
     const goals = this.getAll(editor.document.uri.toString());
-    const showLabels = getGoalLabels();
+    const showLabels = config.getGoalLabels();
     const decorations: vscode.DecorationOptions[] = goals.map((g) => ({
       range: g.range,
       ...(showLabels && {

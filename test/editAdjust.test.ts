@@ -12,6 +12,7 @@ import {
   adjustRange,
   adjustRangeContaining,
   expandRange,
+  commonPrefixSuffix,
   computeSingleChange,
   reconstructPreText,
   type EditParams,
@@ -569,5 +570,54 @@ describe("reconstructPreText", () => {
     const goalRange = r(0, 9, 0, 15);
     const editParams = processChanges([merged!])[0];
     expect(adjustRangeContaining(goalRange, editParams, 2)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// commonPrefixSuffix
+// ---------------------------------------------------------------------------
+
+describe("commonPrefixSuffix", () => {
+  it("identical strings", () => {
+    expect(commonPrefixSuffix("abc", "abc")).toEqual({ prefix: 3, suffix: 0 });
+  });
+
+  it("completely different strings", () => {
+    expect(commonPrefixSuffix("abc", "xyz")).toEqual({ prefix: 0, suffix: 0 });
+  });
+
+  it("common prefix only", () => {
+    expect(commonPrefixSuffix("abcX", "abcY")).toEqual({ prefix: 3, suffix: 0 });
+  });
+
+  it("common suffix only", () => {
+    expect(commonPrefixSuffix("Xabc", "Yabc")).toEqual({ prefix: 0, suffix: 3 });
+  });
+
+  it("both prefix and suffix", () => {
+    expect(commonPrefixSuffix("abcXdef", "abcYdef")).toEqual({ prefix: 3, suffix: 3 });
+  });
+
+  it("insertion in middle", () => {
+    expect(commonPrefixSuffix("ac", "abbc")).toEqual({ prefix: 1, suffix: 1 });
+  });
+
+  it("deletion in middle", () => {
+    expect(commonPrefixSuffix("abbc", "ac")).toEqual({ prefix: 1, suffix: 1 });
+  });
+
+  it("empty strings", () => {
+    expect(commonPrefixSuffix("", "")).toEqual({ prefix: 0, suffix: 0 });
+  });
+
+  it("one empty string", () => {
+    expect(commonPrefixSuffix("abc", "")).toEqual({ prefix: 0, suffix: 0 });
+    expect(commonPrefixSuffix("", "abc")).toEqual({ prefix: 0, suffix: 0 });
+  });
+
+  it("suffix does not overlap with prefix", () => {
+    // "ab" vs "a" — prefix is 1 ("a"), suffix must be 0 (not overlap)
+    expect(commonPrefixSuffix("ab", "a")).toEqual({ prefix: 1, suffix: 0 });
+    expect(commonPrefixSuffix("a", "ab")).toEqual({ prefix: 1, suffix: 0 });
   });
 });

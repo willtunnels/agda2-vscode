@@ -199,6 +199,25 @@ export function expandRange(range: vscode.Range, edit: EditParams): vscode.Range
  *
  * Returns null if the texts are identical (no change).
  */
+/**
+ * Find the lengths of the longest common prefix and suffix between two
+ * strings (suffix does not overlap with prefix).
+ */
+export function commonPrefixSuffix(a: string, b: string): { prefix: number; suffix: number } {
+  const minLen = Math.min(a.length, b.length);
+  let prefix = 0;
+  while (prefix < minLen && a[prefix] === b[prefix]) prefix++;
+
+  let suffix = 0;
+  while (
+    suffix < minLen - prefix &&
+    a[a.length - 1 - suffix] === b[b.length - 1 - suffix]
+  )
+    suffix++;
+
+  return { prefix, suffix };
+}
+
 export function computeSingleChange(
   beforeText: string,
   afterText: string,
@@ -206,21 +225,7 @@ export function computeSingleChange(
 ): vscode.TextDocumentContentChangeEvent | null {
   if (beforeText === afterText) return null;
 
-  // Find common prefix length
-  const minLen = Math.min(beforeText.length, afterText.length);
-  let prefixLen = 0;
-  while (prefixLen < minLen && beforeText[prefixLen] === afterText[prefixLen]) {
-    prefixLen++;
-  }
-
-  // Find common suffix length (not overlapping with prefix)
-  let suffixLen = 0;
-  while (
-    suffixLen < minLen - prefixLen &&
-    beforeText[beforeText.length - 1 - suffixLen] === afterText[afterText.length - 1 - suffixLen]
-  ) {
-    suffixLen++;
-  }
+  let { prefix: prefixLen, suffix: suffixLen } = commonPrefixSuffix(beforeText, afterText);
 
   // When hole-aware, check if the minimal diff is "hidden" inside a
   // {! !} pair: unmatched {! in the prefix and unmatched !} in the suffix.

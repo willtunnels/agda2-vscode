@@ -5,7 +5,8 @@
 // (vscode-lean4/src/abbreviation/AbbreviationHoverProvider.ts)
 // Modified for Agda
 
-import { AbbreviationConfig, AbbreviationProvider } from "./engine/index";
+import { AbbreviationProvider } from "./engine/index";
+import * as config from "../util/config";
 import { Hover, HoverProvider, Position, Range, TextDocument } from "vscode";
 
 /**
@@ -13,10 +14,7 @@ import { Hover, HoverProvider, Position, Range, TextDocument } from "vscode";
  * E.g. "Type ⊓ using \glb or \sqcap"
  */
 export class AbbreviationHoverProvider implements HoverProvider {
-  constructor(
-    private readonly config: AbbreviationConfig,
-    private readonly abbreviations: AbbreviationProvider,
-  ) {}
+  constructor(private readonly abbreviations: AbbreviationProvider) {}
 
   provideHover(document: TextDocument, pos: Position): Hover | undefined {
     const symbol = document.lineAt(pos.line).text.slice(pos.character);
@@ -27,7 +25,7 @@ export class AbbreviationHoverProvider implements HoverProvider {
     }
 
     const parts: string[] = [];
-    const leader = this.config.abbreviationCharacter;
+    const leader = config.getInputLeader();
     for (const [a, kind] of allAbbrevs) {
       const suffix = kind === "alternate" ? " (tab to cycle)" : "";
       parts.push(`\`${leader}${a}\`${suffix}`);

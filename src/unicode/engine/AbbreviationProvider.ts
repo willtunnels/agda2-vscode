@@ -5,8 +5,16 @@
 // (lean4-unicode-input/src/AbbreviationProvider.ts)
 // Modified for Agda
 
-import { AbbreviationConfig, SymbolsByAbbreviation } from "./AbbreviationConfig";
 import abbreviations from "../abbreviations.json";
+
+/**
+ * Maps abbreviation strings to their symbol lists.
+ * Each abbreviation maps to one or more symbols; multi-symbol entries
+ * support Tab-cycling.
+ */
+export interface SymbolsByAbbreviation {
+  [abbrev: string]: string[];
+}
 
 export type ExpansionKind = "default" | "alternate";
 
@@ -20,16 +28,21 @@ export class AbbreviationProvider {
   private symbolsByAbbreviation: SymbolsByAbbreviation = {};
 
   /**
-   * Remembers the last-selected cycle index for each abbreviation key.
-   * Session-only (not persisted), matching Emacs agda2-mode behavior
-   * where `forget-last-selection` is nil.
+   * Remember the last-selected cycle index for each abbreviation key.
    */
   private readonly lastSelectedIndex = new Map<string, number>();
 
-  constructor(readonly config: AbbreviationConfig) {
+  constructor(customTranslations: SymbolsByAbbreviation) {
+    this.reload(customTranslations);
+  }
+
+  /**
+   * Re-merge built-in abbreviations with new custom translations.
+   */
+  reload(customTranslations: SymbolsByAbbreviation): void {
     this.symbolsByAbbreviation = {
       ...(abbreviations as SymbolsByAbbreviation),
-      ...config.customTranslations,
+      ...customTranslations,
     };
   }
 

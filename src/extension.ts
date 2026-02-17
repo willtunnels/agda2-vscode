@@ -4,10 +4,13 @@ import { CommandQueue } from "./core/commandQueue.js";
 import { GoalManager } from "./core/goals.js";
 import { HighlightingManager, SEMANTIC_LEGEND } from "./core/highlighting.js";
 import { WorkspaceState } from "./core/state.js";
-import { registerCommands } from "./editor/commands.js";
+import { registerCommands, ShowInputBox } from "./editor/commands.js";
 import { InfoPanel } from "./editor/infoPanel.js";
 import { registerKeySequenceCommands } from "./editor/keySequence.js";
 import { AbbreviationFeature } from "./unicode/AbbreviationFeature.js";
+import { AbbreviationProvider } from "./unicode/engine/AbbreviationProvider.js";
+import { showUnicodeInputBox } from "./editor/unicodeInputBox.js";
+import * as config from "./util/config.js";
 import { agdaOffsetToPosition } from "./util/position.js";
 import { computeSingleChange, reconstructPreText } from "./util/editAdjust.js";
 
@@ -38,6 +41,18 @@ export function activate(context: vscode.ExtensionContext): void {
   statusBar.tooltip = "Agda -- not started (load a file with Ctrl+C Ctrl+L)";
   statusBar.show();
 
+  const abbreviationProvider = new AbbreviationProvider(config.getCustomTranslations());
+  const abbreviationStatusBar = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    200,
+  );
+
+  // We want to share the same AbbreviationProvider across the AbbreviationFeature and any other UI
+  // elements with unicode input, so that the last-selected cycle index is consistent. It is also
+  // convenient to only have one thing to register an onDidChangeConfiguration listener for.
+  const abbreviationFeature = new AbbreviationFeature(abbreviationProvider, abbreviationStatusBar);
+  const showInputBox: ShowInputBox = (options) => showUnicodeInputBox(abbreviationProvider, abbreviationStatusBar, options);
+
   registerKeySequenceCommands(context);
   registerCommands(context, {
     process: agdaProcess,
@@ -49,6 +64,7 @@ export function activate(context: vscode.ExtensionContext): void {
     infoPanel,
     outputChannel,
     globalStorageUri: context.globalStorageUri,
+    showInputBox,
   });
 
   context.subscriptions.push(
@@ -96,12 +112,16 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("agda.goalLabels")) {
-        for (const editor of vscode.window.visibleTextEditors) {
-          if (editor.document.languageId === "agda") {
-            goals.applyDecorations(editor);
-          }
+    config.init(),
+
+    config.onCustomTranslationsChanged(() => {
+      abbreviationProvider.reload(config.getCustomTranslations());
+    }),
+
+    config.onGoalLabelsChanged(() => {
+      for (const editor of vscode.window.visibleTextEditors) {
+        if (editor.document.languageId === "agda") {
+          goals.applyDecorations(editor);
         }
       }
     }),
@@ -177,10 +197,10 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  const abbreviationFeature = new AbbreviationFeature();
-  context.subscriptions.push(abbreviationFeature);
-
   context.subscriptions.push(
+    abbreviationStatusBar,
+    abbreviationFeature,
+
     agdaProcess,
     commandQueue,
     goals,

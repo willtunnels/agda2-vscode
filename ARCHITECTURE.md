@@ -60,14 +60,14 @@ src/
 ├── editor/             # VSCode integration
 │   ├── commands.ts     # Command handlers (load, give, refine, etc.)
 │   ├── infoPanel.ts    # Agda Info Panel (WebviewPanel for goals, context, errors)
-│   └── keySequence.ts  # Leader M key sequence state machine
+│   ├── keySequence.ts  # Leader M key sequence state machine
+│   └── unicodeInputBox.ts # InputBox with abbreviation support (used for goal prompts)
 ├── unicode/            # Unicode input (backslash abbreviations)
 │   ├── engine/         # Lean 4 abbreviation engine (Apache-2.0, mostly unmodified)
 │   ├── AbbreviationFeature.ts          # Entry point: wires everything together
 │   ├── AbbreviationRewriterFeature.ts  # Manages per-editor rewriter lifecycle
 │   ├── AbbreviationHoverProvider.ts    # Hover tooltips for abbreviation symbols
-│   ├── VSCodeAbbreviationRewriter.ts   # VS Code adapter (isApplyingEdit guard)
-│   └── VSCodeAbbreviationConfig.ts     # Configuration adapter
+│   └── VSCodeAbbreviationRewriter.ts   # VS Code adapter (isApplyingEdit guard)
 ├── util/               # Shared utilities
 │   ├── agdaLocation.ts # Parse Agda source locations in error messages
 │   ├── config.ts       # Typed helpers for reading agda.* configuration
@@ -206,11 +206,17 @@ Agda code uses extensive Unicode (→, ∀, ℕ, λ, etc.). The extension provid
 
 Rather than writing a custom Unicode input system, we adapted the abbreviation engine from [vscode-lean4](https://github.com/leanprover/vscode-lean4) (Apache-2.0). The engine lives in `src/unicode/engine/` and is mostly unmodified from upstream. It provides:
 
-- **`AbbreviationProvider`**: Loads the abbreviation table, supports prefix matching and multi-result lookup
-- **`AbbreviationRewriter`**: Core state machine tracking active abbreviations, deciding when to replace
+- **`AbbreviationProvider`**: Loads the abbreviation table, supports prefix matching and multi-result lookup. Takes custom translations directly (a `SymbolsByAbbreviation` map) and supports `reload()` for live config changes. Also a convenient place to store the last-selected cycle index for each abbreviation with multiple mappings.
+- **`AbbreviationRewriter`**: Core state machine tracking active abbreviations, deciding when to replace. Takes a leader character string and an `AbbreviationTextSource` abstraction.
 - **`TrackedAbbreviation`**: Represents one in-progress abbreviation (its range, current text, matched symbols)
 
-The VS Code integration layer (`VSCodeAbbreviationRewriter`, `AbbreviationRewriterFeature`, `AbbreviationFeature`) adapts the engine to VS Code's APIs -- listening to document changes and selection changes, applying edits, managing per-editor lifecycle.
+The VS Code integration layer (`VSCodeAbbreviationRewriter`, `AbbreviationRewriterFeature`, `AbbreviationFeature`) adapts the engine to VS Code's APIs -- listening to document changes and selection changes, applying edits, managing per-editor lifecycle. The `AbbreviationProvider` and status bar item are created once in `extension.ts` and shared between the editor rewriter and the InputBox.
+
+### InputBox abbreviation support
+
+When Agda commands prompt the user for input (e.g. `agda.give` with an empty goal, `agda.searchAbout`), the extension uses `showUnicodeInputBox` (`src/editor/unicodeInputBox.ts`) instead of plain `vscode.window.showInputBox`. This wraps the same `AbbreviationRewriter` engine so users can type abbreviations like `\to` → `→` inside the input box. Tab/Shift+Tab cycling is supported via dedicated keybindings gated on the `agda.inputBox.isActive` context variable.
+
+The InputBox and editor rewriter both need to format the status bar identically (showing the current abbreviation and cycle list). This logic is shared via the `updateAbbreviationStatusBar` free function exported from `VSCodeAbbreviationRewriter.ts`. Both consumers also use the same operation-queue pattern (enqueue/drain/flush) to serialize async engine calls, though the implementations differ enough (4 op kinds vs 2 because of the limited callback API of `InputBox`) that the queue itself is not shared.
 
 ### Re-entrant edit events and the `isApplyingEdit` guard
 
@@ -292,7 +298,7 @@ Agda uses 1-based absolute code-point offsets for all positions. Two layers hand
 
 ## Configuration
 
-`src/util/config.ts` provides typed helpers for reading `agda.*` settings: `getAgdaPath()`, `getExtraArgs()`, `getBackend()`, `getAdditionalPaths()`, `getGoalLabels()`. The generic `agdaConfig()` helper wraps `vscode.workspace.getConfiguration("agda")`.
+`src/util/config.ts` provides typed helpers for reading `agda.*` settings: `getAgdaPath()`, `getExtraArgs()`, `getBackend()`, `getAdditionalPaths()`, `getGoalLabels()`, `getInputEnabled()`, `getInputLeader()`, `getInputLanguages()`, `getCustomTranslations()`. The generic `agdaConfig()` helper wraps `vscode.workspace.getConfiguration("agda")`.
 
 Available settings: `agda.path` (binary), `agda.additionalPaths` (for Switch Agda), `agda.extraArgs`, `agda.backend` (GHC/JS/LaTeX/HTML), `agda.goalLabels` (show `?N` decorations), plus `agda.input.*` settings for the abbreviation engine.
 
@@ -308,6 +314,6 @@ Begin by running `npm install`.
 
 The extension is bundled with **esbuild** (`esbuild.js`): `src/extension.ts` → `dist/extension.js` as CommonJS (required by VS Code), with `vscode` as an external. `--watch` mode is available for development.
 
-Tests use **vitest** (`vitest.config.mts`) with a mock VS Code API (`test/__mocks__/vscode.ts`). Run with `npx vitest run` (262 tests across 14 files). Tests cover offsets, positions, edit adjustment, goals, highlighting, cursor positioning, info panel rendering, abbreviation engine, version comparison, and location parsing.
+Tests use **vitest** (`vitest.config.mts`) with a mock VS Code API (`test/__mocks__/vscode.ts`). Run with `npx vitest run` (308 tests across 15 files). Tests cover offsets, positions, edit adjustment, goals, highlighting, cursor positioning, info panel rendering, abbreviation engine, InputBox abbreviation support, version comparison, and location parsing.
 
 `scripts/generate-abbreviations.py` regenerates `src/unicode/abbreviations.json` from Agda's Emacs input method by driving Emacs in batch mode to dump the `agda-input` translation table.
