@@ -1581,3 +1581,73 @@ describe("Shadow state (extend/shorten before flush)", () => {
     expect(tracked[0].isReplaced).toBe(true);
   });
 });
+
+describe("deleteAbbreviations", () => {
+  it("deletes a replaced symbol entirely", async () => {
+    const provider = new AbbreviationProvider({ to: ["→"] });
+    const source = new MockTextSource("\\to");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    // Type \to and get →
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "o" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("→");
+
+    // Cursor inside the replaced symbol
+    source.selections = [new Range(0, 0)];
+
+    // Delete abbreviation
+    rewriter.deleteAbbreviations();
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("");
+    expect(rewriter.getTrackedAbbreviations().size).toBe(0);
+  });
+
+  it("deletes a typing-mode abbreviation entirely", async () => {
+    const provider = new AbbreviationProvider({ to: ["→"], top: ["⊤"] });
+    const source = new MockTextSource("\\to");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    // Type \to (still typing since "top" is also a prefix)
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "o" }]);
+
+    // Cursor inside the abbreviation range
+    source.selections = [new Range(2, 0)];
+
+    // Delete abbreviation
+    rewriter.deleteAbbreviations();
+    await rewriter.flushDirty();
+
+    // The full range (\to) should be deleted
+    expect(source.text).toBe("");
+    expect(rewriter.getTrackedAbbreviations().size).toBe(0);
+  });
+
+  it("does nothing when cursor is not in any abbreviation", async () => {
+    const provider = new AbbreviationProvider({ to: ["→"] });
+    const source = new MockTextSource("x\\to");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    // Type \to at offset 1
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "t" }]);
+    rewriter.changeInput([{ range: new Range(3, 0), newText: "o" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("x→");
+
+    // Cursor at offset 0 -- outside the abbreviation
+    source.selections = [new Range(0, 0)];
+
+    rewriter.deleteAbbreviations();
+    await rewriter.flushDirty();
+
+    // Nothing changed
+    expect(source.text).toBe("x→");
+    expect(rewriter.getTrackedAbbreviations().size).toBe(1);
+  });
+});

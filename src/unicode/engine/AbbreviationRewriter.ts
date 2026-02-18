@@ -65,6 +65,12 @@ export class AbbreviationRewriter {
    */
   private readonly dirtyAbbreviations = new Set<TrackedAbbreviation>();
 
+  /**
+   * Abbreviations to delete entirely (Ctrl+Backspace). flushDirty()
+   * replaces their range with empty text and removes them from tracking.
+   */
+  private readonly _deletedAbbreviations = new Set<TrackedAbbreviation>();
+
   constructor(
     private readonly abbreviationCharacter: string,
     private readonly abbreviationProvider: AbbreviationProvider,
@@ -158,6 +164,24 @@ export class AbbreviationRewriter {
   }
 
   /**
+   * Delete all tracked abbreviations that have a cursor in them.
+   * Called by Ctrl+Backspace. Removes the abbreviation text/symbol from
+   * the document entirely.
+   */
+  deleteAbbreviations(): void {
+    const selections = this.textSource.collectSelections();
+
+    const withCursor = [...this.trackedAbbreviations].filter((abbr) =>
+      selections.some((s) => abbr.range.containsRange(s.withLength(0))),
+    );
+
+    for (const abbr of withCursor) {
+      this._deletedAbbreviations.add(abbr);
+      this.removeFromTracking(abbr);
+    }
+  }
+
+  /**
    * Compute diffs between current state and document, apply one batch edit.
    */
   async flushDirty(): Promise<void> {
@@ -170,6 +194,14 @@ export class AbbreviationRewriter {
 
     const changes: Change[] = [];
     const items: FlushItem[] = [];
+
+    // Deleted abbreviations (Ctrl+Backspace)
+    for (const abbr of this._deletedAbbreviations) {
+      const rangeAtCreation = abbr.range;
+      changes.push({ range: rangeAtCreation, newText: "" });
+      items.push({ abbr, newText: "", rangeAtCreation, apply: () => {} });
+    }
+    this._deletedAbbreviations.clear();
 
     // Finished abbreviations (non-matching char typed in typing mode)
     const finished = [...this._finishedAbbreviations];
@@ -303,6 +335,7 @@ export class AbbreviationRewriter {
     this._finishedAbbreviations.clear();
     this._finalizedDirty.clear();
     this.dirtyAbbreviations.clear();
+    this._deletedAbbreviations.clear();
   }
 
   private removeFromTracking(abbr: TrackedAbbreviation): void {

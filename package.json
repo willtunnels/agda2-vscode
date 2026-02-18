@@ -258,6 +258,11 @@
         "category": "Agda"
       },
       {
+        "command": "agda.input.deleteAbbreviation",
+        "title": "Unicode Input: Delete Abbreviation",
+        "category": "Agda"
+      },
+      {
         "command": "agda.inputBox.cycleForward",
         "title": "Input Box: Cycle Abbreviation Forward",
         "category": "Agda"
@@ -265,6 +270,11 @@
       {
         "command": "agda.inputBox.cycleBackward",
         "title": "Input Box: Cycle Abbreviation Backward",
+        "category": "Agda"
+      },
+      {
+        "command": "agda.inputBox.deleteAbbreviation",
+        "title": "Input Box: Delete Abbreviation",
         "category": "Agda"
       }
     ],
@@ -280,6 +290,11 @@
         "when": "editorTextFocus && editorLangId == agda && agda.input.isActive"
       },
       {
+        "command": "agda.input.deleteAbbreviation",
+        "key": "ctrl+backspace",
+        "when": "editorTextFocus && editorLangId == agda && agda.input.isActive"
+      },
+      {
         "command": "agda.inputBox.cycleForward",
         "key": "tab",
         "when": "inputFocus && agda.inputBox.isActive"
@@ -287,6 +302,11 @@
       {
         "command": "agda.inputBox.cycleBackward",
         "key": "shift+tab",
+        "when": "inputFocus && agda.inputBox.isActive"
+      },
+      {
+        "command": "agda.inputBox.deleteAbbreviation",
+        "key": "ctrl+backspace",
         "when": "inputFocus && agda.inputBox.isActive"
       },
       {

@@ -31,7 +31,8 @@ type QueuedOp =
   | { kind: "change"; changes: Change[] }
   | { kind: "selection"; selections: Range[] }
   | { kind: "cycle"; direction: CycleDirection }
-  | { kind: "replaceAll" };
+  | { kind: "replaceAll" }
+  | { kind: "delete" };
 
 /**
  * VS Code adapter for {@link AbbreviationRewriter}.
@@ -259,6 +260,9 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
             case "replaceAll":
               this.rewriter.replaceAllTrackedAbbreviations();
               break;
+            case "delete":
+              this.rewriter.deleteAbbreviations();
+              break;
           }
         }
         await this.rewriter.flushDirty();
@@ -290,6 +294,13 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
    */
   cycleAbbreviations(direction: CycleDirection): void {
     this.enqueueOp({ kind: "cycle", direction });
+  }
+
+  /**
+   * Delete tracked abbreviations under cursors (Ctrl+Backspace).
+   */
+  deleteAbbreviations(): void {
+    this.enqueueOp({ kind: "delete" });
   }
 
   private updateState() {

@@ -68,7 +68,10 @@ class InputBoxTextSource implements AbbreviationTextSource {
   }
 }
 
-type QueuedOp = { kind: "change"; changes: Change[] } | { kind: "cycle"; direction: 1 | -1 };
+type QueuedOp =
+  | { kind: "change"; changes: Change[] }
+  | { kind: "cycle"; direction: 1 | -1 }
+  | { kind: "delete" };
 
 export function showUnicodeInputBox(
   provider: AbbreviationProvider,
@@ -111,6 +114,9 @@ export function showUnicodeInputBox(
               case "cycle":
                 rewriter.cycleAbbreviations(op.direction);
                 break;
+              case "delete":
+                rewriter.deleteAbbreviations();
+                break;
             }
           }
           await rewriter.flushDirty();
@@ -138,6 +144,11 @@ export function showUnicodeInputBox(
       () => enqueueOp({ kind: "cycle", direction: -1 }),
     );
 
+    const deleteAbbrDisposable = vscode.commands.registerCommand(
+      "agda.inputBox.deleteAbbreviation",
+      () => enqueueOp({ kind: "delete" }),
+    );
+
     function doResolve(value: string | undefined): void {
       if (resolved) return;
       resolved = true;
@@ -147,6 +158,7 @@ export function showUnicodeInputBox(
 
       cycleForwardDisposable.dispose();
       cycleBackwardDisposable.dispose();
+      deleteAbbrDisposable.dispose();
 
       resolve(value);
       inputBox.dispose();

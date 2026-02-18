@@ -42,6 +42,10 @@ export class AbbreviationRewriterFeature {
         this.activeAbbreviationRewriter?.cycleAbbreviations(-1);
       }),
 
+      commands.registerTextEditorCommand("agda.input.deleteAbbreviation", () => {
+        this.activeAbbreviationRewriter?.deleteAbbreviations();
+      }),
+
       window.onDidChangeActiveTextEditor((editor) => this.changedActiveTextEditor(editor)),
 
       workspace.onDidOpenTextDocument(async (doc) => {
