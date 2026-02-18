@@ -152,6 +152,11 @@ def postprocess(raw: dict) -> dict:
             # normal typing. In our VS Code engine, they would prevent space
             # from finalizing the abbreviation.
             cleaned[stripped] = translations
+    # agda-input.el defines "\\" → "\", but the Elisp dump above excludes
+    # translations that are single printable ASCII characters (to avoid
+    # inheriting useless identity mappings like "a" → "a" from TeX).
+    # This catches "\\" → "\" as collateral, so we add it back here.
+    cleaned["\\"] = ["\\"]
     return dict(sorted(cleaned.items()))
 
 
