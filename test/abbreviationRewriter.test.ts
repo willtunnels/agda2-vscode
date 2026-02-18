@@ -71,7 +71,7 @@ describe("AbbreviationRewriter (core)", () => {
 
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("a");
+    expect(tracked[0].text).toBe("a");
   });
 
   it("finishes abbreviation when non-matching char is typed", () => {
@@ -86,7 +86,7 @@ describe("AbbreviationRewriter (core)", () => {
 
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("to");
+    expect(tracked[0].text).toBe("to");
 
     // Type " " (space) which breaks the prefix
     rewriter.changeInput([{ range: new Range(3, 0), newText: " " }]);
@@ -96,7 +96,7 @@ describe("AbbreviationRewriter (core)", () => {
     // replacement -- it should replace and remove from tracking.
     const after = [...rewriter.getTrackedAbbreviations()];
     expect(after.length).toBe(1);
-    expect(after[0].abbreviation).toBe("to");
+    expect(after[0].text).toBe("to");
   });
 
   it("backslash then space immediately finalizes (space does not extend)", async () => {
@@ -356,7 +356,7 @@ describe("Cycling", () => {
     let tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
     expect(tracked[0].isReplaced).toBe(true);
-    expect(tracked[0].abbreviation).toBe("t");
+    expect(tracked[0].text).toBe("t");
 
     // Now type "o" -- document becomes "T1o", then extend should replace with →
     source.text = "T1o";
@@ -366,7 +366,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("→");
     tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("to");
+    expect(tracked[0].text).toBe("to");
     expect(tracked[0].isReplaced).toBe(true);
   });
 
@@ -395,7 +395,7 @@ describe("Cycling", () => {
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
     expect(tracked[0].isReplaced).toBe(false);
-    expect(tracked[0].abbreviation).toBe("ab");
+    expect(tracked[0].text).toBe("ab");
   });
 
   it("typing non-extending char after replaced symbol finalizes", async () => {
@@ -442,7 +442,7 @@ describe("Cycling", () => {
     let tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
     expect(tracked[0].isReplaced).toBe(true);
-    expect(tracked[0].abbreviation).toBe("top");
+    expect(tracked[0].text).toBe("top");
 
     // Backspace deletes ⊤ -- VS Code removes the character, we get a deletion change
     source.text = "";
@@ -453,7 +453,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("→");
     tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("to");
+    expect(tracked[0].text).toBe("to");
     expect(tracked[0].isReplaced).toBe(true);
   });
 
@@ -488,7 +488,7 @@ describe("Cycling", () => {
 
     let tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("t");
+    expect(tracked[0].text).toBe("t");
     expect(tracked[0].isReplaced).toBe(true);
 
     // Backspace 3: T1 → \ (shorten "t" to empty, bare leader)
@@ -499,7 +499,7 @@ describe("Cycling", () => {
 
     tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("");
+    expect(tracked[0].text).toBe("");
     expect(tracked[0].isReplaced).toBe(false);
   });
 
@@ -523,7 +523,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("\\");
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("");
+    expect(tracked[0].text).toBe("");
     expect(tracked[0].isReplaced).toBe(false);
   });
 
@@ -551,7 +551,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("\\ab");
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("ab");
+    expect(tracked[0].text).toBe("ab");
     expect(tracked[0].isReplaced).toBe(false);
   });
 
@@ -585,7 +585,7 @@ describe("Cycling", () => {
 
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("to");
+    expect(tracked[0].text).toBe("to");
     expect(tracked[0].isReplaced).toBe(true);
   });
 
@@ -624,7 +624,7 @@ describe("Cycling", () => {
 
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("top");
+    expect(tracked[0].text).toBe("top");
     expect(tracked[0].isReplaced).toBe(true);
   });
 
@@ -657,7 +657,7 @@ describe("Cycling", () => {
     // Both chars were processed correctly — abbreviation is "top"
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("top");
+    expect(tracked[0].text).toBe("top");
     expect(source.text).toBe("⊤");
   });
 
@@ -728,7 +728,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("→");
     tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("to");
+    expect(tracked[0].text).toBe("to");
     expect(tracked[0].isReplaced).toBe(true);
     // Cycle index should be reset to 0 after shorten
     expect(tracked[0].cycleIndex).toBe(0);
@@ -759,7 +759,7 @@ describe("Cycling", () => {
     let tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
     expect(tracked[0].isReplaced).toBe(true);
-    expect(tracked[0].abbreviation).toBe("BA");
+    expect(tracked[0].text).toBe("BA");
 
     // Backspace: VS Code deletes both surrogates → deletion of length 2
     source.text = "";
@@ -771,7 +771,7 @@ describe("Cycling", () => {
     expect(source.text.length).toBe(2); // Also a surrogate pair
     tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("B");
+    expect(tracked[0].text).toBe("B");
     expect(tracked[0].isReplaced).toBe(true);
   });
 
@@ -833,7 +833,7 @@ describe("Cycling", () => {
     // abbr1 should still be tracked (the deletion was distant, not adjacent)
     const tracked = [...rewriter.getTrackedAbbreviations()];
     // At least abbr1 should survive
-    const abbr1Alive = tracked.some((t) => t.abbreviation === "to" && t.isReplaced);
+    const abbr1Alive = tracked.some((t) => t.text === "to" && t.isReplaced);
     expect(abbr1Alive).toBe(true);
   });
 
@@ -868,7 +868,7 @@ describe("Cycling", () => {
     // Both abbreviations should survive and shorten.
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(2);
-    expect(tracked.every((t) => t.abbreviation === "t")).toBe(true);
+    expect(tracked.every((t) => t.text === "t")).toBe(true);
   });
 
   it("multi-cursor: simultaneous backspace inserts shortened symbols at correct offsets", async () => {
@@ -913,7 +913,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("T1 XY T1");
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(2);
-    expect(tracked.every((t) => t.abbreviation === "t" && t.isReplaced)).toBe(true);
+    expect(tracked.every((t) => t.text === "t" && t.isReplaced)).toBe(true);
   });
 
   it("real abbreviation table: \\t → ◂, then typing 'o' extends to → (\\to)", async () => {
@@ -939,7 +939,7 @@ describe("Cycling", () => {
     let tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
     expect(tracked[0].isReplaced).toBe(true);
-    expect(tracked[0].abbreviation).toBe("t");
+    expect(tracked[0].text).toBe("t");
 
     // Now type "o" -- should extend to "to" → →
     source.text = "◂o";
@@ -949,7 +949,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("→");
     tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("to");
+    expect(tracked[0].text).toBe("to");
     expect(tracked[0].isReplaced).toBe(true);
   });
 
@@ -1050,7 +1050,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("→");
     tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("to");
+    expect(tracked[0].text).toBe("to");
   });
 
   it("selection far from abbreviation kills it (cursor moved away)", async () => {
@@ -1178,7 +1178,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("⇒");
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("to");
+    expect(tracked[0].text).toBe("to");
     expect(tracked[0].cycleIndex).toBe(1);
   });
 
@@ -1210,7 +1210,7 @@ describe("Cycling", () => {
     expect(source.text).toBe("T3");
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("t");
+    expect(tracked[0].text).toBe("t");
     expect(tracked[0].cycleIndex).toBe(2);
   });
 
@@ -1311,7 +1311,7 @@ describe("Cycling", () => {
     // "q" at stale offset 2 is not adjacent to ⊤ at range (0,1) → silently missed
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("top");
+    expect(tracked[0].text).toBe("top");
 
     // With batching (no flush between), the same events work correctly:
     const source2 = new MockTextSource("\\to");
@@ -1368,7 +1368,7 @@ describe("Cycling", () => {
     const tracked = [...rewriter.getTrackedAbbreviations()];
     // Both characters processed: abbreviation is "topq", symbol is Q
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("topq");
+    expect(tracked[0].text).toBe("topq");
     expect(source.text).toBe("Q");
   });
 });
@@ -1403,7 +1403,7 @@ describe("Shadow state (extend/shorten before flush)", () => {
     expect(source.text).toBe("→");
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("to");
+    expect(tracked[0].text).toBe("to");
     expect(tracked[0].isReplaced).toBe(true);
   });
 
@@ -1471,7 +1471,7 @@ describe("Shadow state (extend/shorten before flush)", () => {
     expect(source.text).toBe("⊤");
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("top");
+    expect(tracked[0].text).toBe("top");
     expect(tracked[0].isReplaced).toBe(true);
   });
 
@@ -1509,7 +1509,7 @@ describe("Shadow state (extend/shorten before flush)", () => {
     expect(source.text).toBe("T1");
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("t");
+    expect(tracked[0].text).toBe("t");
     expect(tracked[0].isReplaced).toBe(true);
   });
 
@@ -1543,7 +1543,7 @@ describe("Shadow state (extend/shorten before flush)", () => {
     expect(source.text).toBe("T");
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("top");
+    expect(tracked[0].text).toBe("top");
     expect(tracked[0].isReplaced).toBe(true);
     expect(tracked[0].cycleIndex).toBe(1);
   });
@@ -1577,7 +1577,7 @@ describe("Shadow state (extend/shorten before flush)", () => {
     expect(source.text).toBe("⊤");
     const tracked = [...rewriter.getTrackedAbbreviations()];
     expect(tracked.length).toBe(1);
-    expect(tracked[0].abbreviation).toBe("top");
+    expect(tracked[0].text).toBe("top");
     expect(tracked[0].isReplaced).toBe(true);
   });
 });

@@ -5,7 +5,7 @@ import { Range } from "../src/unicode/engine/Range";
 describe("TrackedAbbreviation", () => {
   it("starts with empty abbreviation", () => {
     const ta = new TrackedAbbreviation(new Range(1, 0), "");
-    expect(ta.abbreviation).toBe("");
+    expect(ta.text).toBe("");
   });
 
   it("returns appended when text is appended at end (caller decides validity)", () => {
@@ -15,11 +15,11 @@ describe("TrackedAbbreviation", () => {
     const result = ta.processChange(new Range(1, 0), "t");
     expect(result).toEqual({ kind: "appended", text: "t" });
     // Abbreviation text is NOT updated -- caller must call acceptAppend
-    expect(ta.abbreviation).toBe("");
+    expect(ta.text).toBe("");
 
     // Caller decides the append is valid and accepts it
     ta.acceptAppend("t");
-    expect(ta.abbreviation).toBe("t");
+    expect(ta.text).toBe("t");
   });
 
   it("returns appended for non-matching text too (caller decides)", () => {
@@ -29,7 +29,7 @@ describe("TrackedAbbreviation", () => {
     const result = ta.processChange(new Range(3, 0), " ");
     expect(result).toEqual({ kind: "appended", text: " " });
     // Abbreviation text unchanged -- caller should NOT call acceptAppend
-    expect(ta.abbreviation).toBe("to");
+    expect(ta.text).toBe("to");
   });
 
   it("moves when change happens before it", () => {
