@@ -39,11 +39,12 @@ type QueuedOp =
  * Handles two concerns:
  *   1. **Re-entrant edit events** — `workspace.applyEdit()` fires a
  *      synchronous `onDidChangeTextDocument` for our own edit, which
- *      must be suppressed.
+ *      must be identified and suppressed.
  *   2. **Serialization** — all event operations (text changes, selection
- *      changes, cycling, replaceAll) must be serialized through a
- *      single queue, lest some internal yield point allow them to
- *      interleave in undesirable ways.
+ *      changes, cycling, replaceAll) are serialized through a single
+ *      queue. The queue is drained synchronously (feeding ops to the
+ *      engine), then a single `flushDirty()` applies the accumulated
+ *      diff to the document.
  */
 export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   private readonly disposables = new Array<Disposable>();
@@ -59,20 +60,26 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
     textDecoration: "underline dashed",
   });
 
-  /**
-   * Re-entrant edit guard. While true:
-   *   - The first `onDidChangeTextDocument` event is our own edit — skip it.
-   *   - Subsequent events are real user keystrokes (possible in VS Code
-   *     Remote due to IPC latency) — buffer them for replay.
-   */
+  /** Set during our own edits to suppress selection events from cursor repositioning. */
   private isApplyingEdit = false;
-  private seenReentrantEvent = false;
-  private eventsBufferedDuringEdit: Change[][] = [];
 
-  /** Operation queue (see class doc). */
+  /**
+   * The changes we are currently applying via `workspace.applyEdit()`.
+   * Used to identify the re-entrant edit event.
+   */
+  private pendingOwnChanges: Change[] | null = null;
+
+  /**
+   * Change events that arrived before our own edit event during the await.
+   * These are pre-flush user events with pre-flush offsets — they need offset
+   * adjustment before being replayed into the queue.
+   */
+  private preFlushBuffer: Change[][] = [];
+
+  /** Operation queue. */
   private opQueue: QueuedOp[] = [];
 
-  /** Non-null while draining. Reentrancy guard + awaitable by {@link flush}. */
+  /** Non-null while draining. */
   private drainPromise: Promise<void> | null = null;
 
   constructor(
@@ -97,12 +104,15 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
           newText: c.text,
         }));
 
-        if (this.isApplyingEdit) {
-          if (!this.seenReentrantEvent) {
-            this.seenReentrantEvent = true;
-            return; // Our own edit — skip.
+        if (this.pendingOwnChanges !== null) {
+          if (this.matchesOwnEdit(changes)) {
+            // Identified our own edit — skip it.
+            // Future events during this await are post-flush and go to enqueueOp.
+            this.pendingOwnChanges = null;
+            return;
           }
-          this.eventsBufferedDuringEdit.push(changes); // Real keystroke — buffer.
+          // Pre-flush user event — buffer for offset adjustment.
+          this.preFlushBuffer.push(changes);
           return;
         }
 
@@ -116,7 +126,7 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
         }
 
         // Selection events during our own edits are just the cursor
-        // being repositioned by applyEdit -- safe to ignore.
+        // being repositioned by applyEdit — safe to ignore.
         if (this.isApplyingEdit) {
           return;
         }
@@ -135,6 +145,10 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
    * Apply abbreviation replacements to the document.
    * Uses `workspace.applyEdit()` — `textEditor.edit()` has an internal
    * retry loop that can amplify edits in VS Code Remote.
+   *
+   * During the `await`, incoming change events are handled via edit matching:
+   * our own edit is identified and skipped, pre-flush user events are buffered
+   * and replayed with adjusted offsets.
    */
   async replaceAbbreviations(changes: Change[]): Promise<boolean> {
     try {
@@ -144,21 +158,24 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
         wsEdit.replace(doc.uri, toVsCodeRange(c.range, doc), c.newText);
       }
 
+      this.pendingOwnChanges = changes;
+      this.preFlushBuffer = [];
       this.isApplyingEdit = true;
-      this.seenReentrantEvent = false;
-      this.eventsBufferedDuringEdit = [];
       const ok = await workspace.applyEdit(wsEdit);
       this.isApplyingEdit = false;
+      this.pendingOwnChanges = null;
 
-      // Enqueue any user events that arrived during the edit.
-      // They'll be picked up by the current drainQueue loop
-      // (if running) or by enqueueOp's drain kick.
-      this.replayBufferedEvents();
+      // Replay pre-flush events with adjusted offsets (if edit succeeded)
+      // and post-flush events (already in opQueue from enqueueOp).
+      this.replayPreFlushEvents(ok ? changes : null);
 
       return ok;
     } catch (e) {
       this.isApplyingEdit = false;
-      this.replayBufferedEvents();
+      this.pendingOwnChanges = null;
+      this.replayPreFlushEvents(null);
+      // VS Code throws a generic Error (no typed subclass) if the editor
+      // closes during the await — harmless, so suppress it.
       if (getErrorMessage(e) !== "TextEditor#edit not possible on closed editors") {
         console.error("Error while replacing abbreviation:", e);
       }
@@ -166,16 +183,40 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
     return false;
   }
 
-  /** Move events buffered during isApplyingEdit into the operation queue. */
-  private replayBufferedEvents(): void {
-    for (const changes of this.eventsBufferedDuringEdit) {
-      this.opQueue.push({ kind: "change", changes });
+  /**
+   * Replay pre-flush events buffered during the edit await.
+   * If `appliedChanges` is provided, adjust offsets through them.
+   */
+  private replayPreFlushEvents(appliedChanges: Change[] | null): void {
+    for (const changes of this.preFlushBuffer) {
+      const adjusted = appliedChanges !== null ? adjustOffsets(changes, appliedChanges) : changes;
+      this.opQueue.push({ kind: "change", changes: adjusted });
     }
-    this.eventsBufferedDuringEdit = [];
-    this.drainQueue();
+    this.preFlushBuffer = [];
   }
 
-  // --- Unified queue ---
+  /**
+   * Check whether an incoming change event matches the edit we are currently
+   * applying. Compares count, offsets, lengths, and text.
+   */
+  private matchesOwnEdit(eventChanges: Change[]): boolean {
+    const own = this.pendingOwnChanges;
+    if (own === null) return false;
+    if (eventChanges.length !== own.length) return false;
+
+    // Sort both by start offset for stable comparison.
+    const sortedEvent = [...eventChanges].sort((a, b) => a.range.start - b.range.start);
+    const sortedOwn = [...own].sort((a, b) => a.range.start - b.range.start);
+
+    for (let i = 0; i < sortedOwn.length; i++) {
+      const e = sortedEvent[i];
+      const o = sortedOwn[i];
+      if (e.range.start !== o.range.start || e.range.length !== o.range.length || e.newText !== o.newText) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   /**
    * Push an operation onto the queue and start draining.
@@ -186,53 +227,43 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   }
 
   /**
-   * Execute a single queued operation against the engine.
-   */
-  private async executeOp(op: QueuedOp): Promise<void> {
-    switch (op.kind) {
-      case "change":
-        this.rewriter.changeInput(op.changes);
-        await this.rewriter.flushPendingOps();
-        await this.rewriter.triggerAbbreviationReplacement();
-        this.updateState();
-        break;
-
-      case "selection":
-        // Use live selections — preceding ops may have changed the document
-        // since this event was enqueued, making the captured offsets stale.
-        {
-          const liveSelections = this.collectSelections();
-          await this.rewriter.changeSelections(liveSelections);
-        }
-        this.updateState();
-        break;
-
-      case "cycle":
-        await this.rewriter.cycleAbbreviations(op.direction);
-        this.updateState();
-        break;
-
-      case "replaceAll":
-        await this.rewriter.replaceAllTrackedAbbreviations();
-        this.updateState();
-        break;
-    }
-  }
-
-  /**
    * Start a drain loop if one isn't already running.
-   * The loop processes ops until the queue is empty, including any ops
-   * pushed during execution (e.g. buffered events from replaceAbbreviations).
    */
   private drainQueue(): void {
     if (this.drainPromise) return;
     this.drainPromise = this.processDrain();
   }
 
+  /**
+   * Drain all queued ops synchronously (feeding them to the engine),
+   * then flush once to apply the accumulated diff to the document.
+   *
+   * Events may arrive during the async flush (buffered and replayed).
+   * If the queue has new ops after the flush, loop again.
+   */
   private async processDrain(): Promise<void> {
     try {
-      while (this.opQueue.length > 0) {
-        await this.executeOp(this.opQueue.shift()!);
+      while (true) {
+        while (this.opQueue.length > 0) {
+          const op = this.opQueue.shift()!;
+          switch (op.kind) {
+            case "change":
+              this.rewriter.changeInput(op.changes);
+              break;
+            case "selection":
+              this.rewriter.changeSelections(op.selections);
+              break;
+            case "cycle":
+              this.rewriter.cycleAbbreviations(op.direction);
+              break;
+            case "replaceAll":
+              this.rewriter.replaceAllTrackedAbbreviations();
+              break;
+          }
+        }
+        await this.rewriter.flushDirty();
+        this.updateState();
+        if (this.opQueue.length === 0) break;
       }
     } finally {
       this.drainPromise = null;
@@ -321,14 +352,34 @@ export function formatAbbreviationStatusBar(
   tracked: ReadonlySet<TrackedAbbreviation>,
 ): string | null {
   if (tracked.size === 0) return null;
+
   const abbr = [...tracked][0];
   if (abbr.isReplaced) {
     const symbols = abbr.cycleSymbols;
     const idx = abbr.cycleIndex;
     const symbolList = symbols.map((s, i) => (i === idx ? `[ ${s} ]` : s)).join("  ");
-    return `${leader}${abbr.abbreviation}  ${symbolList}`;
+    return `${leader}${abbr.text}  ${symbolList}`;
   }
-  return `${leader}${abbr.abbreviation}`;
+
+  return `${leader}${abbr.text}`;
+}
+
+/**
+ * Adjust change offsets through a set of applied changes.
+ * Used to transform pre-flush event offsets to post-flush positions.
+ */
+function adjustOffsets(queuedChanges: Change[], appliedChanges: Change[]): Change[] {
+  const sorted = [...appliedChanges].sort((a, b) => a.range.start - b.range.start);
+  return queuedChanges.map((c) => {
+    let shift = 0;
+    for (const applied of sorted) {
+      if (c.range.start >= applied.range.start + applied.range.length) {
+        shift += applied.newText.length - applied.range.length;
+      }
+    }
+    if (shift === 0) return c;
+    return { range: new Range(c.range.start + shift, c.range.length), newText: c.newText };
+  });
 }
 
 function fromVsCodeRange(range: LineColRange, doc: TextDocument): Range {

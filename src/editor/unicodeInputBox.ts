@@ -1,6 +1,6 @@
 /**
- * A `showInputBox` wrapper that runs the abbreviation engine against InputBox
- * text, so `\to` → `→` works in input boxes the same way as in the editor.
+ * A `showInputBox` wrapper that runs the abbreviation engine against the
+ * InputBox text so that `\to` → `→` etc. work as in the editor.
  */
 
 import * as vscode from "vscode";
@@ -29,9 +29,14 @@ export function computeChanges(oldValue: string, newValue: string): Change[] {
   return [{ range: new Range(prefix, oldMiddleLen), newText: newMiddle }];
 }
 
-/** AbbreviationTextSource backed by an InputBox value string. Edits are synchronous. */
+/** An AbbreviationTextSource backed by an InputBox value. Edits are synchronous. */
 class InputBoxTextSource implements AbbreviationTextSource {
+  /* Usually in sync with `this.inputBox.value`, except at the beginning of `onDidChangeValue`
+   * handlers, where the InputBox value has already changed but we haven't processed the change yet.
+   * There `text` holds the old value as a baseline for computing diffs. */
   text = "";
+
+  /* Reentrancy guard */
   isApplyingEdit = false;
 
   constructor(private readonly inputBox: vscode.InputBox) {}
@@ -96,22 +101,21 @@ export function showUnicodeInputBox(
 
     async function processDrain(): Promise<void> {
       try {
-        while (opQueue.length > 0) {
-          const op = opQueue.shift()!;
-          if (op.kind === "change") {
-            rewriter.changeInput(op.changes);
-            // Defer replacement until the last change in a consecutive run —
-            // fast typing queues multiple changes whose offsets assume the
-            // original text.
-            const nextIsChange = opQueue.length > 0 && opQueue[0].kind === "change";
-            if (!nextIsChange) {
-              await rewriter.flushPendingOps();
-              await rewriter.triggerAbbreviationReplacement();
+        while (true) {
+          while (opQueue.length > 0) {
+            const op = opQueue.shift()!;
+            switch (op.kind) {
+              case "change":
+                rewriter.changeInput(op.changes);
+                break;
+              case "cycle":
+                rewriter.cycleAbbreviations(op.direction);
+                break;
             }
-          } else {
-            await rewriter.cycleAbbreviations(op.direction);
           }
+          await rewriter.flushDirty();
           updateStatusBar();
+          if (opQueue.length === 0) break;
         }
       } finally {
         drainPromise = null;
@@ -128,6 +132,7 @@ export function showUnicodeInputBox(
       "agda.inputBox.cycleForward",
       () => enqueueOp({ kind: "cycle", direction: 1 }),
     );
+
     const cycleBackwardDisposable = vscode.commands.registerCommand(
       "agda.inputBox.cycleBackward",
       () => enqueueOp({ kind: "cycle", direction: -1 }),
@@ -136,10 +141,13 @@ export function showUnicodeInputBox(
     function doResolve(value: string | undefined): void {
       if (resolved) return;
       resolved = true;
+
       statusBarItem.hide();
       void vscode.commands.executeCommand("setContext", "agda.inputBox.isActive", false);
+
       cycleForwardDisposable.dispose();
       cycleBackwardDisposable.dispose();
+
       resolve(value);
       inputBox.dispose();
     }
@@ -147,7 +155,6 @@ export function showUnicodeInputBox(
     inputBox.onDidChangeValue((newValue) => {
       // Skip change events caused by our own replaceAbbreviations calls.
       if (textSource.isApplyingEdit) {
-        textSource.text = newValue;
         return;
       }
 
@@ -162,7 +169,10 @@ export function showUnicodeInputBox(
     inputBox.onDidAccept(async () => {
       // Drain any pending ops, then finalize all tracked abbreviations
       if (drainPromise) await drainPromise;
-      await rewriter.replaceAllTrackedAbbreviations();
+
+      rewriter.replaceAllTrackedAbbreviations();
+      await rewriter.flushDirty();
+
       doResolve(textSource.text);
     });
 
