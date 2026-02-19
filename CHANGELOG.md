@@ -1,5 +1,11 @@
 # Change Log
 
+## [v1.1.1](https://github.com/willtunnels/agda2-vscode/tree/v1.1.1) (2026-02-18)
+
+- Fix highlighting for options in pragmas (e.g., "--postfix-projections")
+- Adjust highlight colors to match Emacs agda2-mode more closely
+- Classify "{"/"}" as "brackets" and "surroundingPairs" in our VSCode language configuration
+
 ## [v1.1.0](https://github.com/willtunnels/agda2-vscode/tree/v1.1.0) (2026-02-18)
 
 - Added Unicode support to all input boxes (e.g., to the popup for case splitting with an empty hole)
