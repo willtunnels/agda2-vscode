@@ -124,6 +124,17 @@ const DECORATION_STYLES: Record<string, vscode.DecorationRenderOptions> = {
   cosmeticproblem: {
     backgroundColor: new vscode.ThemeColor("agda.cosmeticProblem.background"),
   },
+  missingdefinition: {
+    backgroundColor: new vscode.ThemeColor("agda.missingDefinition.background"),
+  },
+  error: {
+    color: new vscode.ThemeColor("agda.error.foreground"),
+    textDecoration: "underline",
+  },
+  errorwarning: {
+    backgroundColor: new vscode.ThemeColor("agda.errorWarning.background"),
+    textDecoration: "underline",
+  },
   dottedpattern: {
     fontStyle: "italic",
   },
@@ -190,7 +201,12 @@ function generateSemanticTokens(
     } else {
       const firstLineLen = lineLength(start.line) - start.character;
       if (firstLineLen > 0) {
-        tokens.push({ line: start.line, startChar: start.character, length: firstLineLen, typeIdx });
+        tokens.push({
+          line: start.line,
+          startChar: start.character,
+          length: firstLineLen,
+          typeIdx,
+        });
       }
       for (let line = start.line + 1; line < end.line; line++) {
         const len = lineLength(line);
@@ -233,7 +249,7 @@ function groupDecorationRanges(
 /**
  * The core logic of adjustForEdits: for each change, either expand intersecting entry ranges (if
  * there is a pending expansion) or remove entries with intersecting ranges (for all other edits).
- * 
+ *
  * Mutates `entries` and `pendingExpansions`.
  */
 function adjustEntries(
@@ -242,9 +258,10 @@ function adjustEntries(
   changes: readonly vscode.TextDocumentContentChangeEvent[],
 ): void {
   for (const edit of processChanges(changes)) {
-    const isExpansion = pendingExpansions.length > 0
-      ? consumeMatchingExpansion(pendingExpansions, edit.editRange)
-      : false;
+    const isExpansion =
+      pendingExpansions.length > 0
+        ? consumeMatchingExpansion(pendingExpansions, edit.editRange)
+        : false;
 
     for (let i = entries.length - 1; i >= 0; i--) {
       if (isExpansion) {
@@ -374,15 +391,20 @@ export class HighlightingManager
     const builder = new vscode.SemanticTokensBuilder(SEMANTIC_LEGEND);
 
     if (entries) {
-      const tokens = generateSemanticTokens(
-        entries,
-        (line) => document.lineAt(line).text.length,
-      );
+      const tokens = generateSemanticTokens(entries, (line) => document.lineAt(line).text.length);
 
-      // Sort by position (required by the builder)
+      // Sort by position (required by the builder). The sort is stable, so
+      // tokens from earlier entries come first for equal positions. We skip
+      // tokens that overlap with the previously emitted token, giving
+      // first-wins precedence (matching Emacs's annotation-merge-faces).
       tokens.sort((a, b) => (a.line !== b.line ? a.line - b.line : a.startChar - b.startChar));
+      let prevLine = -1;
+      let prevEnd = -1;
       for (const t of tokens) {
+        if (t.line === prevLine && t.startChar < prevEnd) continue;
         builder.push(t.line, t.startChar, t.length, t.typeIdx, 0);
+        prevLine = t.line;
+        prevEnd = t.startChar + t.length;
       }
     }
 

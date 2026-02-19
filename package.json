@@ -908,40 +908,40 @@
         "id": "agda.terminationProblem.background",
         "description": "Background color for termination problems",
         "defaults": {
-          "light": "#FFA5004D",
-          "dark": "#80530040",
-          "highContrast": "#FFA5004D",
-          "highContrastLight": "#FFA5004D"
+          "light": "#FFA07A4D",
+          "dark": "#80240040",
+          "highContrast": "#FFA07A4D",
+          "highContrastLight": "#FFA07A4D"
         }
       },
       {
         "id": "agda.positivityProblem.background",
         "description": "Background color for positivity problems",
         "defaults": {
-          "light": "#FFA5004D",
-          "dark": "#80530040",
-          "highContrast": "#FFA5004D",
-          "highContrastLight": "#FFA5004D"
+          "light": "#CD853F4D",
+          "dark": "#803F0040",
+          "highContrast": "#CD853F4D",
+          "highContrastLight": "#CD853F4D"
         }
       },
       {
         "id": "agda.coverageProblem.background",
         "description": "Background color for coverage problems",
         "defaults": {
-          "light": "#FFA5004D",
+          "light": "#F5DEB34D",
           "dark": "#80530040",
-          "highContrast": "#FFA5004D",
-          "highContrastLight": "#FFA5004D"
+          "highContrast": "#F5DEB34D",
+          "highContrastLight": "#F5DEB34D"
         }
       },
       {
         "id": "agda.confluenceProblem.background",
         "description": "Background color for confluence problems",
         "defaults": {
-          "light": "#FF00FF33",
+          "light": "#FFC0CB33",
           "dark": "#80008033",
-          "highContrast": "#FF00FF33",
-          "highContrastLight": "#FF00FF33"
+          "highContrast": "#FFC0CB33",
+          "highContrastLight": "#FFC0CB33"
         }
       },
       {
@@ -959,7 +959,7 @@
         "description": "Background color for code being type-checked",
         "defaults": {
           "light": "#ADD8E64D",
-          "dark": "#1A3A4D4D",
+          "dark": "#0060804D",
           "highContrast": "#ADD8E64D",
           "highContrastLight": "#ADD8E64D"
         }
@@ -1002,6 +1002,36 @@
           "dark": "#40404026",
           "highContrast": "#C8C8C826",
           "highContrastLight": "#C8C8C826"
+        }
+      },
+      {
+        "id": "agda.missingDefinition.background",
+        "description": "Background color for missing definitions",
+        "defaults": {
+          "light": "#FFA5004D",
+          "dark": "#80404040",
+          "highContrast": "#FFA5004D",
+          "highContrastLight": "#FFA5004D"
+        }
+      },
+      {
+        "id": "agda.error.foreground",
+        "description": "Foreground color for errors",
+        "defaults": {
+          "light": "#FF0000",
+          "dark": "#FF0000",
+          "highContrast": "#FF0000",
+          "highContrastLight": "#FF0000"
+        }
+      },
+      {
+        "id": "agda.errorWarning.background",
+        "description": "Background color for fatal warnings",
+        "defaults": {
+          "light": "#F080804D",
+          "dark": "#80240040",
+          "highContrast": "#F080804D",
+          "highContrastLight": "#F080804D"
         }
       }
     ],
