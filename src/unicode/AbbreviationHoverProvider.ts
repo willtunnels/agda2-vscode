@@ -5,7 +5,7 @@
 // (vscode-lean4/src/abbreviation/AbbreviationHoverProvider.ts)
 // Modified for Agda
 
-import { AbbreviationProvider } from "./engine/index";
+import { AbbreviationProvider, ExpansionKind } from "./engine/index";
 import * as config from "../util/config";
 import { Hover, HoverProvider, Position, Range, TextDocument } from "vscode";
 
@@ -17,22 +17,31 @@ export class AbbreviationHoverProvider implements HoverProvider {
   constructor(private readonly abbreviations: AbbreviationProvider) {}
 
   provideHover(document: TextDocument, pos: Position): Hover | undefined {
-    const symbol = document.lineAt(pos.line).text.slice(pos.character);
-    const allAbbrevs = this.abbreviations.collectAllAbbreviations(symbol);
+    const restOfLine = document.lineAt(pos.line).text.slice(pos.character);
+    const codePoints = [...restOfLine].slice(0, this.abbreviations.maxSymbolCodePoints);
 
-    if (allAbbrevs.length === 0) {
-      return undefined;
+    // Longest match wins
+    type Match = { symbol: string; abbrevs: [string, ExpansionKind][] };
+    let match: Match | undefined;
+    for (let n = codePoints.length; n >= 1; n--) {
+      const symbol = codePoints.slice(0, n).join("");
+      const abbrevs = this.abbreviations.collectAllAbbreviations(symbol);
+      if (abbrevs.length > 0) {
+        match = { symbol, abbrevs };
+        break;
+      }
     }
 
-    const parts: string[] = [];
+    if (!match) return undefined;
+
     const leader = config.getInputLeader();
-    for (const [a, kind] of allAbbrevs) {
+    const parts = match.abbrevs.map(([a, kind]) => {
       const suffix = kind === "alternate" ? " (tab to cycle)" : "";
-      parts.push(`\`${leader}${a}\`${suffix}`);
-    }
+      return `\`${leader}${a}\`${suffix}`;
+    });
 
-    const hoverMarkdown = `Type \`${symbol}\` using ${parts.join(" or ")}`;
-    const hoverRange = new Range(pos, pos.translate(0, symbol.length));
+    const hoverMarkdown = `Type \`${match.symbol}\` using ${parts.join(" or ")}`;
+    const hoverRange = new Range(pos, pos.translate(0, match.symbol.length));
     return new Hover(hoverMarkdown, hoverRange);
   }
 }

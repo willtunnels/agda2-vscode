@@ -26,6 +26,10 @@ export type ExpansionKind = "default" | "alternate";
  */
 export class AbbreviationProvider {
   private symbolsByAbbreviation: SymbolsByAbbreviation = {};
+  private abbreviationsBySymbol = new Map<string, [string, ExpansionKind][]>();
+
+  /** Maximum code-point length of any symbol in the table. */
+  maxSymbolCodePoints: number = 0;
 
   /**
    * Remember the last-selected cycle index for each abbreviation key.
@@ -44,6 +48,23 @@ export class AbbreviationProvider {
       ...(abbreviations as SymbolsByAbbreviation),
       ...customTranslations,
     };
+
+    this.maxSymbolCodePoints = Object.values(this.symbolsByAbbreviation)
+      .flat()
+      .reduce((max, s) => Math.max(max, [...s].length), 0);
+
+    this.abbreviationsBySymbol.clear();
+    for (const [abbrev, syms] of Object.entries(this.symbolsByAbbreviation)) {
+      for (let i = 0; i < syms.length; i++) {
+        const kind: ExpansionKind = i === 0 ? "default" : "alternate";
+        let entry = this.abbreviationsBySymbol.get(syms[i]);
+        if (!entry) {
+          entry = [];
+          this.abbreviationsBySymbol.set(syms[i], entry);
+        }
+        entry.push([abbrev, kind]);
+      }
+    }
   }
 
   /**
@@ -88,14 +109,7 @@ export class AbbreviationProvider {
    * of the list (i.e. whether it is the default expansion or a cycle option).
    */
   collectAllAbbreviations(symbol: string): [string, ExpansionKind][] {
-    const result: [string, ExpansionKind][] = [];
-    for (const [a, syms] of Object.entries(this.symbolsByAbbreviation)) {
-      const index = syms.indexOf(symbol);
-      if (index !== -1) {
-        result.push([a, index === 0 ? "default" : "alternate"]);
-      }
-    }
-    return result;
+    return this.abbreviationsBySymbol.get(symbol) ?? [];
   }
 
   /**
