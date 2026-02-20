@@ -123,6 +123,7 @@ export interface Services {
   infoPanel: InfoPanel;
   outputChannel: vscode.OutputChannel;
   globalStorageUri: vscode.Uri;
+  extensionUri: vscode.Uri;
   showInputBox: ShowInputBox;
 }
 
@@ -156,6 +157,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     infoPanel,
     outputChannel,
     globalStorageUri,
+    extensionUri,
     showInputBox,
   } = services;
 
@@ -854,6 +856,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
             picked.release,
             platform,
             storageDir,
+            extensionUri.fsPath,
             (message, _increment) => progress.report({ message }),
             token,
           );

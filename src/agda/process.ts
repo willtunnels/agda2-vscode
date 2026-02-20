@@ -68,7 +68,8 @@ export class AgdaProcess implements vscode.Disposable {
       execFile(agdaPath, ["--version"], { timeout: 10000 }, (err, stdout, stderr) => {
         if (err) {
           const detail = stderr?.trim() || err.message;
-          reject(new Error(`Failed to run '${agdaPath} --version': ${detail}`));
+          const suffix = err.code != null ? ` (exit code ${err.code})` : "";
+          reject(new Error(`Failed to run '${agdaPath} --version': ${detail}${suffix}`));
           return;
         }
 

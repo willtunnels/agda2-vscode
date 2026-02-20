@@ -51,7 +51,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // elements with unicode input, so that the last-selected cycle index is consistent. It is also
   // convenient to only have one thing to register an onDidChangeConfiguration listener for.
   const abbreviationFeature = new AbbreviationFeature(abbreviationProvider, abbreviationStatusBar);
-  const showInputBox: ShowInputBox = (options) => showUnicodeInputBox(abbreviationProvider, abbreviationStatusBar, options);
+  const showInputBox: ShowInputBox = (options) =>
+    showUnicodeInputBox(abbreviationProvider, abbreviationStatusBar, options);
 
   registerKeySequenceCommands(context);
   registerCommands(context, {
@@ -64,6 +65,7 @@ export function activate(context: vscode.ExtensionContext): void {
     infoPanel,
     outputChannel,
     globalStorageUri: context.globalStorageUri,
+    extensionUri: context.extensionUri,
     showInputBox,
   });
 

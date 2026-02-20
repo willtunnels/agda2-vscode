@@ -19,7 +19,8 @@ import { formatVersion } from "../../src/agda/version.js";
 import type { TestAgdaBinary } from "../helpers/agdaSession.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_DIR = path.resolve(__dirname, "../../.agda-test-binaries");
+const PROJECT_ROOT = path.resolve(__dirname, "../..");
+const CACHE_DIR = path.join(PROJECT_ROOT, ".agda-test-binaries");
 
 // Extend vitest's ProvidedContext so inject() is typed.
 declare module "vitest" {
@@ -50,8 +51,12 @@ export default async function (project: TestProject) {
   for (const release of releases) {
     const versionStr = formatVersion(release.version);
     try {
-      const binaryPath = await downloadAndInstall(release, platform, CACHE_DIR, (msg) =>
-        console.log(`    [Agda ${versionStr}] ${msg}`),
+      const binaryPath = await downloadAndInstall(
+        release,
+        platform,
+        CACHE_DIR,
+        PROJECT_ROOT,
+        (msg) => console.log(`    [Agda ${versionStr}] ${msg}`),
       );
       binaries.push({ version: versionStr, binaryPath });
       console.log(`    Agda ${versionStr} ready at ${binaryPath}`);

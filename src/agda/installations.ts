@@ -60,17 +60,16 @@ const RELEASES: Record<string, AgdaRelease[]> = {
       version: agdaVersion(2, 8, 0),
       url: "https://github.com/agda/agda/releases/download/v2.8.0/Agda-v2.8.0-macOS-x64.tar.xz",
     },
-    // v2.7.0.1 macOS binary is arm64-only
+    // v2.7.0.1 only has an arm64 macOS binary
   ],
   "win32-x64": [
     {
       version: agdaVersion(2, 8, 0),
       url: "https://github.com/agda/agda/releases/download/v2.8.0/Agda-v2.8.0-win64.zip",
     },
-    {
-      version: agdaVersion(2, 7, 0, 1),
-      url: "https://github.com/agda/agda/releases/download/v2.7.0.1/Agda-v2.7.0.1-win64.zip",
-    },
+    // v2.8.0 is missing "zlib1.dll", so we vendor it. v2.7.0.1 is additionally missing MinGW
+    // runtime DLLs "libgcc_s_seh-1.dll", "libstdc++-6.dll", and "libwinpthread-1.dll". Supporting
+    // it is too much of a hassle.
   ],
 };
 
@@ -112,6 +111,7 @@ export async function downloadAndInstall(
   release: AgdaRelease,
   platform: AgdaPlatform,
   storageDir: string,
+  extensionDir: string,
   progress: (message: string, increment?: number) => void,
   token?: CancellationToken,
 ): Promise<string> {
@@ -159,6 +159,16 @@ export async function downloadAndInstall(
       await execFileAsync("xattr", ["-cr", binDir]);
     } catch {
       // Not fatal -- attribute may not be set
+    }
+  }
+
+  // The Agda 2.8.0 win64 release dynamically links zlib but doesn't bundle it.
+  // Copy our vendored zlib1.dll next to agda.exe.
+  if (platform.os === "win32") {
+    const zlibSrc = path.join(extensionDir, "vendor", "win64", "zlib1.dll");
+    const zlibDst = path.join(binDir, "zlib1.dll");
+    if (!(await fileExists(zlibDst))) {
+      await fs.promises.copyFile(zlibSrc, zlibDst);
     }
   }
 
