@@ -2,6 +2,7 @@
 
 ## [v1.2.0](https://github.com/willtunnels/agda2-vscode/tree/v1.2.0) (2026-02-25)
 
+- Add rename feature
 - Fix abbreviation hover feature
 - Fix Agda binary download on Windows (missing DLL)
 - Improve word selection (by default VSCode splits on "-", which is valid in Agda identifiers)
