@@ -34,6 +34,8 @@ export function activate(context: vscode.ExtensionContext): void {
       highlighting,
       SEMANTIC_LEGEND,
     ),
+    vscode.languages.registerDocumentHighlightProvider({ language: "agda" }, highlighting),
+    vscode.languages.registerRenameProvider({ language: "agda" }, highlighting),
   );
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);

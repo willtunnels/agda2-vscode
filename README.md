@@ -108,9 +108,8 @@ Key sequences time out after 2 seconds of inactivity.
 
 ## Tips
 
-Here are some tips for interacting with Agda (these are also applicable to the Emacs `agda2-mode`):
-
 - Goals relocate as you type, but this is only best-effort because rechecking the file with Agda can be expensive. If the type of a goal seems off, try reloading (`Ctrl+C Ctrl+L` / `Leader M L`).
+- Due to the nature of the Agda interaction protocol, the rename action (`F2` by default) only modifies the current file. Be careful when renaming symbols also used externally.
 - If you run "auto" (`Ctrl+C Ctrl+A` / `Leader M A`) and your cursor is not inside a goal, Agda will try to find a solution to every goal in the file, quickly dispatching anything trivial.
 
 ## VSCodeVim

@@ -20,6 +20,11 @@ import type { DefinitionSite, HighlightingPayload } from "../agda/responses.js";
 import { processChanges, adjustRange, expandRange } from "../util/editAdjust.js";
 import { agdaHighlightRangeToVscode } from "../util/position.js";
 
+// --- Word pattern (mirrors language-configuration.json wordPattern) ---
+
+const WORD_RE = /[^\s(){}\"@;.]+/;
+const WORD_BOUNDARY = String.raw`[\s(){}"@;.]|^|$`;
+
 // --- Stored entry ---
 
 export interface StoredEntry {
@@ -55,6 +60,23 @@ const TOKEN_MODIFIERS = [
 export const SEMANTIC_LEGEND = new vscode.SemanticTokensLegend(
   [...TOKEN_TYPES],
   [...TOKEN_MODIFIERS],
+);
+
+/** Token type indices that represent identifiers (renameable). */
+const RENAMEABLE_TYPE_INDICES: ReadonlySet<number> = new Set(
+  (
+    [
+      "type",
+      "function",
+      "variable",
+      "parameter",
+      "property",
+      "enumMember",
+      "namespace",
+      "struct",
+      "macro",
+    ] as const
+  ).map((t) => TOKEN_TYPES.indexOf(t)),
 );
 
 /** Map from Agda atom names to semantic token types. */
@@ -163,6 +185,14 @@ function getTokenTypeIndex(atoms: string[]): number {
   return -1;
 }
 
+/**
+ * Half-open range check: true when start <= position < end.
+ * VSCode's Range.contains is closed (start <= position <= end).
+ */
+function rangeContains(range: vscode.Range, position: vscode.Position): boolean {
+  return range.start.isBeforeOrEqual(position) && position.isBefore(range.end);
+}
+
 // --- Helpers ---
 
 /**
@@ -221,6 +251,32 @@ function generateSemanticTokens(
   }
 
   return tokens;
+}
+
+/**
+ * Sort by position and remove overlapping tokens (first-wins precedence,
+ * matching Emacs's annotation-merge-faces). The sort is stable, so tokens
+ * from earlier entries win for equal positions.
+ */
+function resolveSemanticTokens(
+  entries: readonly StoredEntry[],
+  lineLength: (line: number) => number,
+): SemanticToken[] {
+  const tokens = generateSemanticTokens(entries, lineLength);
+  tokens.sort((a, b) => (a.line !== b.line ? a.line - b.line : a.startChar - b.startChar));
+
+  const result: SemanticToken[] = [];
+  let prevLine = -1;
+  let prevEnd = -1;
+
+  for (const t of tokens) {
+    if (t.line === prevLine && t.startChar < prevEnd) continue;
+    result.push(t);
+    prevLine = t.line;
+    prevEnd = t.startChar + t.length;
+  }
+
+  return result;
 }
 
 /**
@@ -284,7 +340,11 @@ function adjustEntries(
 // --- Manager ---
 
 export class HighlightingManager
-  implements vscode.DocumentSemanticTokensProvider, vscode.Disposable
+  implements
+    vscode.DocumentSemanticTokensProvider,
+    vscode.DocumentHighlightProvider,
+    vscode.RenameProvider,
+    vscode.Disposable
 {
   /** Decoration types shared across files (atom → type). */
   private decorationTypes = new Map<string, vscode.TextEditorDecorationType>();
@@ -391,20 +451,9 @@ export class HighlightingManager
     const builder = new vscode.SemanticTokensBuilder(SEMANTIC_LEGEND);
 
     if (entries) {
-      const tokens = generateSemanticTokens(entries, (line) => document.lineAt(line).text.length);
-
-      // Sort by position (required by the builder). The sort is stable, so
-      // tokens from earlier entries come first for equal positions. We skip
-      // tokens that overlap with the previously emitted token, giving
-      // first-wins precedence (matching Emacs's annotation-merge-faces).
-      tokens.sort((a, b) => (a.line !== b.line ? a.line - b.line : a.startChar - b.startChar));
-      let prevLine = -1;
-      let prevEnd = -1;
-      for (const t of tokens) {
-        if (t.line === prevLine && t.startChar < prevEnd) continue;
+      const lineLength = (line: number) => document.lineAt(line).text.length;
+      for (const t of resolveSemanticTokens(entries, lineLength)) {
         builder.push(t.line, t.startChar, t.length, t.typeIdx, 0);
-        prevLine = t.line;
-        prevEnd = t.startChar + t.length;
       }
     }
 
@@ -420,11 +469,103 @@ export class HighlightingManager
     const entries = this.entriesByUri.get(uri);
     if (!entries) return undefined;
     for (const entry of entries) {
-      if (entry.definitionSite && entry.range.contains(position)) {
+      if (entry.definitionSite && rangeContains(entry.range, position)) {
         return entry.definitionSite;
       }
     }
     return undefined;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Document highlights (word occurrences)
+  // ---------------------------------------------------------------------------
+
+  // Highlighting is regex based (whereas renaming is semantic token based). The advantage of the
+  // regex based solution is that it is cheaper and does not require the file to have been freshly
+  // loaded by Agda. On the other hand, it is not quite as accurate because some Agda kinds reside
+  // in disjoint namespaces, e.g., modules and functions.
+  provideDocumentHighlights(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+  ): vscode.DocumentHighlight[] | undefined {
+    const wordRange = document.getWordRangeAtPosition(position, WORD_RE);
+    if (!wordRange) return undefined;
+
+    const word = document.getText(wordRange);
+
+    // Escape regex special characters (https://github.com/tc39/proposal-regex-escaping)
+    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`(?<=${WORD_BOUNDARY})${escaped}(?=${WORD_BOUNDARY})`, "g");
+
+    const text = document.getText();
+    const results: vscode.DocumentHighlight[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = pattern.exec(text)) !== null) {
+      const start = document.positionAt(m.index);
+      const end = document.positionAt(m.index + m[0].length);
+      results.push(new vscode.DocumentHighlight(new vscode.Range(start, end)));
+    }
+
+    return results;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rename (F2)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Find the ranges of semantic tokens with the same text and token type as the
+   * token at the given position.
+   */
+  private getTokenMatches(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+  ): vscode.Range[] | undefined {
+    const entries = this.entriesByUri.get(document.uri.toString());
+    if (!entries) return undefined;
+
+    const lineLength = (line: number) => document.lineAt(line).text.length;
+    const toRange = (t: SemanticToken) =>
+      new vscode.Range(t.line, t.startChar, t.line, t.startChar + t.length);
+
+    const tokens = resolveSemanticTokens(entries, lineLength);
+    const hit = tokens.find((t) => rangeContains(toRange(t), position));
+    if (!hit || !RENAMEABLE_TYPE_INDICES.has(hit.typeIdx)) return undefined;
+
+    const hitText = document.getText(toRange(hit));
+    return tokens
+      .filter((t) => t.typeIdx === hit.typeIdx && document.getText(toRange(t)) === hitText)
+      .map(toRange);
+  }
+
+  provideRenameEdits(
+    document: vscode.TextDocument,
+    position: vscode.Position,
+    newName: string,
+  ): vscode.WorkspaceEdit | undefined {
+    const matches = this.getTokenMatches(document, position);
+    if (!matches) return undefined;
+
+    const edit = new vscode.WorkspaceEdit();
+    for (const range of matches) {
+      edit.replace(document.uri, range, newName);
+    }
+
+    return edit;
+  }
+
+  // Errors thrown by this function are shown in a message box in the editor.
+  prepareRename(document: vscode.TextDocument, position: vscode.Position): vscode.Range {
+    if (!this.entriesByUri.has(document.uri.toString())) {
+      throw new Error("Load the file first (Ctrl+C Ctrl+L / Leader M L)");
+    }
+
+    const matches = this.getTokenMatches(document, position);
+    if (!matches) {
+      throw new Error("No renameable token here");
+    }
+
+    return matches[0];
   }
 
   // ---------------------------------------------------------------------------
