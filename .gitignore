@@ -6,3 +6,7 @@ dist/
 # Test artifacts
 .agda-test-binaries/
 *.agdai
+
+# Editor files
+.vscode/
+.claude/

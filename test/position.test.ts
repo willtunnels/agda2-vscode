@@ -76,6 +76,34 @@ describe("agdaCpOffsetToUtf16", () => {
     expect(agdaCpOffsetToUtf16("abc", ao(1))).toBe(0);
     expect(agdaCpOffsetToUtf16("𝕄", ao(1))).toBe(0);
   });
+
+  it("CRLF: \\r is skipped (Agda uses text-mode IO, never sees \\r)", () => {
+    // Agda reads "ab\ncd" (5 code points), but VS Code text is "ab\r\ncd"
+    const text = "ab\r\ncd";
+    expect(agdaCpOffsetToUtf16(text, ao(1))).toBe(0); // 'a'
+    expect(agdaCpOffsetToUtf16(text, ao(2))).toBe(1); // 'b'
+    expect(agdaCpOffsetToUtf16(text, ao(3))).toBe(2); // '\r' skipped, points to '\r\n' pair
+    expect(agdaCpOffsetToUtf16(text, ao(4))).toBe(4); // 'c'
+    expect(agdaCpOffsetToUtf16(text, ao(5))).toBe(5); // 'd'
+  });
+
+  it("CRLF + supplementary: offsets correct after both \\r and surrogate pairs", () => {
+    // Agda sees "𝕄\nα" (3 code points), VS Code text is "𝕄\r\nα"
+    const text = "𝕄\r\nα";
+    expect(agdaCpOffsetToUtf16(text, ao(1))).toBe(0); // '𝕄' (2 UTF-16 units)
+    expect(agdaCpOffsetToUtf16(text, ao(2))).toBe(2); // '\r' skipped, '\n' at u16=3
+    expect(agdaCpOffsetToUtf16(text, ao(3))).toBe(4); // 'α'
+  });
+
+  it("multiple CRLF lines: drift accumulates correctly", () => {
+    // Agda sees "a\nb\nc" (5 cp), VS Code text is "a\r\nb\r\nc"
+    const text = "a\r\nb\r\nc";
+    expect(agdaCpOffsetToUtf16(text, ao(1))).toBe(0); // 'a'
+    expect(agdaCpOffsetToUtf16(text, ao(2))).toBe(1); // '\n' (but at u16=2 after \r)
+    expect(agdaCpOffsetToUtf16(text, ao(3))).toBe(3); // 'b'
+    expect(agdaCpOffsetToUtf16(text, ao(4))).toBe(4); // '\n' (but at u16=5 after \r)
+    expect(agdaCpOffsetToUtf16(text, ao(5))).toBe(6); // 'c'
+  });
 });
 
 describe("utf16OffsetToAgdaCp", () => {
@@ -110,6 +138,29 @@ describe("utf16OffsetToAgdaCp", () => {
   it("round-trip: agdaCp → utf16 → agdaCp", () => {
     const text = "data 𝕄 : ℕ → ℕ\nα = zero";
     const codePoints = [...text];
+    for (let cp1 = 1; cp1 <= codePoints.length + 1; cp1++) {
+      const offset = ao(cp1);
+      const utf16 = agdaCpOffsetToUtf16(text, offset);
+      const roundTripped = utf16OffsetToAgdaCp(text, utf16);
+      expect(raw(roundTripped)).toBe(cp1);
+    }
+  });
+
+  it("CRLF: \\r is skipped in reverse conversion", () => {
+    const text = "ab\r\ncd";
+    // utf16 offsets: a=0, b=1, \r=2, \n=3, c=4, d=5
+    // Agda code points (no \r): a=1, b=2, \n=3, c=4, d=5
+    expect(raw(utf16OffsetToAgdaCp(text, 0))).toBe(1); // 'a'
+    expect(raw(utf16OffsetToAgdaCp(text, 1))).toBe(2); // 'b'
+    expect(raw(utf16OffsetToAgdaCp(text, 4))).toBe(4); // 'c'
+    expect(raw(utf16OffsetToAgdaCp(text, 5))).toBe(5); // 'd'
+  });
+
+  it("CRLF round-trip: agdaCp → utf16 → agdaCp", () => {
+    const text = "data 𝕄 : ℕ → ℕ\r\nα = zero";
+    // Code points as Agda sees them (no \r)
+    const agdaText = text.replace(/\r/g, "");
+    const codePoints = [...agdaText];
     for (let cp1 = 1; cp1 <= codePoints.length + 1; cp1++) {
       const offset = ao(cp1);
       const utf16 = agdaCpOffsetToUtf16(text, offset);

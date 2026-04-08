@@ -48,6 +48,12 @@ export function agdaCpOffsetToUtf16(text: string, offset: AgdaOffset): number {
   let utf16 = 0;
 
   while (cpCount < targetCp && utf16 < text.length) {
+    // Skip \r -- Agda's Haskell runtime uses text-mode IO which converts
+    // CRLF to LF, so \r never counts as a code point in Agda offsets.
+    if (text.charCodeAt(utf16) === 0x0d) {
+      utf16++;
+      continue;
+    }
     const code = text.codePointAt(utf16)!;
     utf16 += code > 0xffff ? 2 : 1;
     cpCount++;
@@ -65,6 +71,11 @@ export function utf16OffsetToAgdaCp(text: string, utf16Offset: number): AgdaOffs
   let utf16 = 0;
 
   while (utf16 < utf16Offset && utf16 < text.length) {
+    // Skip \r -- not counted in Agda's code-point offsets (see above).
+    if (text.charCodeAt(utf16) === 0x0d) {
+      utf16++;
+      continue;
+    }
     const code = text.codePointAt(utf16)!;
     utf16 += code > 0xffff ? 2 : 1;
     cpCount++;

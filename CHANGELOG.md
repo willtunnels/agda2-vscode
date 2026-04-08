@@ -1,5 +1,9 @@
 # Change Log
 
+## [v1.2.1](https://github.com/willtunnels/agda2-vscode/tree/v1.2.1) (2026-04-07)
+
+- Fix highlight ranges on Windows (account for the fact that Agda uses Haskell text-mode IO which converts CRLF to LF)
+
 ## [v1.2.0](https://github.com/willtunnels/agda2-vscode/tree/v1.2.0) (2026-02-25)
 
 - Add rename feature
