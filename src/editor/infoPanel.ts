@@ -616,8 +616,6 @@ function getWebviewHtml(): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
   :root {
-    font-family: var(--vscode-editor-font-family), 'Fira Code', 'Consolas', monospace;
-    font-size: var(--vscode-editor-font-size, 13px);
     color: var(--vscode-editor-foreground);
     background-color: var(--vscode-editor-background);
   }
@@ -625,6 +623,11 @@ function getWebviewHtml(): string {
     margin: 0;
     padding: 8px 12px;
     line-height: 1.5;
+    /* VS Code sets --vscode-font-family (sans-serif UI font) on body by default,
+       which overrides anything declared on :root. Set the editor font here so
+       the panel actually uses monospace. */
+    font-family: var(--vscode-editor-font-family), monospace;
+    font-size: var(--vscode-editor-font-size, 13px);
   }
   .placeholder {
     color: var(--vscode-descriptionForeground);
