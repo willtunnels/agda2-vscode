@@ -17,7 +17,6 @@ This extension can download recent versions of Agda for all major platforms, so 
 - **Unicode input**: type `\` followed by an abbreviation to insert Unicode characters
 - **Semantic highlighting**: foreground colors from your theme via semantic tokens; background decorations for unsolved metas, termination problems, coverage issues, etc.
 - **Info panel**: persistent side panel showing goal types, context, errors, and other Agda output
-- **Outline**: populates VSCode's document outline to provide an overview of the modules, records, types and terms in the current file
 - **Go-to-definition**: Ctrl+Click or F12 to jump to the definition site of any highlighted name
 - **VSCodeVim integration**: interacts correctly with VSCodeVim, e.g., accounts for VSCodeVim's bespoke undo/redo mechanism when adjusting goal spans
 
@@ -185,6 +184,7 @@ Hover over any Unicode character in an Agda file to see which abbreviations prod
 | `agda.input.languages`          | `["agda"]` | Languages in which Unicode input is enabled                                                          |
 | `agda.input.customTranslations` | `{}`       | Custom abbreviation overrides (key: abbreviation, value: symbol or array of symbols for Tab-cycling) |
 | `agda.goalLabels`               | `true`     | Show goal ID labels (`?0`, `?1`, ...) next to interaction points                                     |
+| `agda.reloadOnGive`             | `false`    | Automatically reload the file after give or refine actions                                           |
 
 ## Comparison with `banacorn/agda2-mode-vscode`
 

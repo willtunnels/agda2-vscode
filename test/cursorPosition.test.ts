@@ -237,6 +237,7 @@ import { MockDocumentEditor } from "./helpers/mockDocumentEditor.js";
 import { Position, Range, Selection, MockTextDocument } from "./__mocks__/vscode.js";
 import { GoalManager } from "../src/core/goals.js";
 import { processBatchedResponses, noopCallbacks } from "../src/core/responseProcessor.js";
+import { toAgdaOffset } from "../src/util/offsets.js";
 
 for (const { version, binaryPath } of agdaBinaries) {
   describe(`Give with ? expansion (harness) -- Agda v${version}`, () => {
@@ -404,8 +405,8 @@ describe("Paren give expands ? in goal content", () => {
             id: 0,
             range: [
               {
-                start: { pos: goalStart + 1, line: 1, col: goalStart + 1 },
-                end: { pos: goalEnd + 1, line: 1, col: goalEnd + 1 },
+                start: { pos: toAgdaOffset(goalStart + 1), line: 1, col: goalStart + 1 },
+                end: { pos: toAgdaOffset(goalEnd + 1), line: 1, col: goalEnd + 1 },
               },
             ],
           },
@@ -453,8 +454,8 @@ describe("Paren give expands ? in goal content", () => {
             id: 0,
             range: [
               {
-                start: { pos: goalStart + 1, line: 1, col: goalStart + 1 },
-                end: { pos: goalEnd + 1, line: 1, col: goalEnd + 1 },
+                start: { pos: toAgdaOffset(goalStart + 1), line: 1, col: goalStart + 1 },
+                end: { pos: toAgdaOffset(goalEnd + 1), line: 1, col: goalEnd + 1 },
               },
             ],
           },
@@ -517,8 +518,8 @@ describe("Give then undo removes goal", () => {
           id: 0,
           range: [
             {
-              start: { pos: goalStart + 1, line: 1, col: goalStart + 1 },
-              end: { pos: goalEnd + 1, line: 1, col: goalEnd + 1 },
+              start: { pos: toAgdaOffset(goalStart + 1), line: 1, col: goalStart + 1 },
+              end: { pos: toAgdaOffset(goalEnd + 1), line: 1, col: goalEnd + 1 },
             },
           ],
         },
