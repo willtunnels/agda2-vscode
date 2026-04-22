@@ -10,7 +10,7 @@ The Emacs agda2-mode and this extension are structurally parallel, except:
 
 - We use a modified version of the Lean 4 abbreviation engine (see [Unicode input](#unicode-input) below) for Unicode input.
 - The Emacs mode has some Haskell integration that we do not.
-- In Emacs, highlighting is stored as buffer text properties that are lost when switching buffers. The Emacs mode uses `Cmd_load_highlighting_info` to ask Agda to re-send all highlighting for the file. We don't need this because `HighlightingManager` keeps all decoration data in memory and `reapply(editor)` restores decorations when an editor regains focus.
+- In Emacs, highlighting is stored as buffer text properties that are lost when switching buffers. The Emacs mode uses `Cmd_load_highlighting_info` to ask Agda to re-send all highlighting for the file. We don't need this because `SessionState` keeps all highlighting data in memory and `DecorationRenderer` re-pushes decorations whenever the active editor changes.
 
 ## `--interaction` vs. `--interaction-json`
 
@@ -50,33 +50,43 @@ src/
 │   ├── protocol.ts     # Line-buffered stdout parser, prompt detection
 │   ├── responses.ts    # TypeScript types for all JSON responses
 │   └── version.ts      # Opaque branded AgdaVersion type + comparison
-├── core/               # Domain state management
+├── core/               # Domain state (pure data, no VS Code providers)
 │   ├── commandQueue.ts      # Serial command queue with streaming
+│   ├── defId.ts             # Opaque branded DefId type for definition identity
 │   ├── documentEditor.ts    # TextEditor abstraction for testable response processing
 │   ├── goals.ts             # Goal tracking, navigation, decorations
-│   ├── highlighting.ts      # Unified highlighting (decorations + semantic tokens + definition sites)
 │   ├── responseProcessor.ts # Handles document-mutating responses (give, make-case, goal expansion)
+│   ├── sessionState.ts      # Per-file Agda state: highlighting entries + name/type info
 │   └── state.ts             # Per-document and workspace state
-├── editor/             # VSCode integration
+├── providers/          # Thin VS Code provider adapters over core state
+│   ├── defTree.ts           # Pure def-tree builder shared by outline + name-info fetch
+│   ├── definition.ts        # Go-to-definition (uses LiveDefinitionSite)
+│   ├── documentHighlights.ts # Regex-based word occurrence highlighting
+│   ├── documentSymbols.ts   # Outline from def tree (owns re-registration, prunes where-locals)
+│   ├── hover.ts             # AgdaHoverProvider (type info + abbreviations, agda/lagda) and GenericHoverProvider (abbreviations only, other languages)
+│   ├── nameMatching.ts      # Pure helpers for joining ModuleContents responses to DefIds
+│   ├── rename.ts            # F2 rename via semantic tokens
+│   └── semanticTokens.ts    # Foreground color tokens (pull-based)
+├── editor/             # VS Code integration layer (side effects on editors)
 │   ├── commands.ts     # Command handlers (load, give, refine, etc.)
+│   ├── decorationRenderer.ts # Pushes setDecorations from SessionState state events
 │   ├── infoPanel.ts    # Agda Info Panel (WebviewPanel for goals, context, errors)
 │   ├── keySequence.ts  # Leader M key sequence state machine
 │   └── unicodeInputBox.ts # InputBox with abbreviation support (used for goal prompts)
 ├── unicode/            # Unicode input (backslash abbreviations)
 │   ├── engine/         # Lean 4 abbreviation engine (Apache-2.0, mostly unmodified)
-│   ├── AbbreviationFeature.ts          # Entry point: wires everything together
 │   ├── AbbreviationRewriterFeature.ts  # Manages per-editor rewriter lifecycle
-│   ├── AbbreviationHoverProvider.ts    # Hover tooltips for abbreviation symbols
 │   └── VSCodeAbbreviationRewriter.ts   # VS Code adapter (isApplyingEdit guard)
 ├── util/               # Shared utilities
 │   ├── agdaLocation.ts # Parse Agda source locations in error messages
 │   ├── config.ts       # Typed helpers for reading agda.* configuration
-│   ├── editAdjust.ts   # Edit-adjustment math for keeping state in sync with edits
+│   ├── editAdjust.ts   # Edit-adjustment math (range/position shifts)
 │   ├── errorMessage.ts # Extract message from Error objects or unknown values
 │   ├── iotcm.ts        # IOTCM envelope + Haskell string quoting
 │   ├── offsets.ts      # Pure offset conversion (Agda code points ↔ UTF-16)
-│   └── position.ts     # VS Code position/range conversion wrappers
-└── extension.ts        # Entry point: activate/deactivate
+│   ├── position.ts     # VS Code position/range conversion wrappers
+│   └── semanticTokens.ts # Pure derivation of semantic tokens from entries
+└── extension.ts        # Entry point: activate/deactivate, wires state ↔ providers
 ```
 
 ## Data flow
@@ -103,22 +113,80 @@ Highlighting is handled in the streaming callback so it appears progressively as
 
 Each highlighting entry has a `[from, to]` range (1-based absolute character offsets) and a list of aspect atom names (e.g. `["keyword"]`, `["inductiveconstructor"]`), plus an optional `definitionSite` for go-to-definition.
 
-#### Unified HighlightingManager
+#### SessionState: pure data, no providers
 
-`HighlightingManager` (`src/core/highlighting.ts`) is the single source of truth for all highlighting state. It stores `StoredEntry` objects per file URI -- each with a `Range`, atoms, and optional `definitionSite` -- and derives two outputs:
+`SessionState` (`src/core/sessionState.ts`) is the single source of truth for per-file Agda-derived state. Two kinds of state:
 
-1. **Semantic tokens (foreground colors)** -- `HighlightingManager` implements `DocumentSemanticTokensProvider`. VS Code pulls tokens on demand; the manager maps Agda atoms to standard semantic token types so **all foreground text colors come from the user's theme**.
+1. **Highlighting entries** (`StoredEntry[]` per URI) -- each with a `Range`, atoms (e.g. `["function"]`, `["keyword"]`), an `isSelfDef` flag, and an optional `LiveDefinitionSite`.
+2. **Name/type info** (`Map<DefId, NameInfo>` per URI) -- populated post-load by `Cmd_show_module_contents_toplevel` and joined to self-def entries by name. Consumed by the outline and hover.
 
-2. **Decorations (backgrounds, underlines, font styles)** -- pushed to VS Code via `setDecorations`. These cover visual properties that semantic tokens cannot express, using `ThemeColor` references to custom color IDs defined in `contributes.colors`.
+`SessionState` has no VS Code provider methods and no editor side effects. It just ingests (`applyHighlighting`, `setNameInfo`), exposes accessors (`getEntries`, `getDefinitionSite`, `getNameInfo`, `hasLoaded`), adjusts for edits (`adjustForEdits`, `registerPendingExpansions`), and fires `onDidChange({uri})` on every mutation. The providers and `DecorationRenderer` subscribe.
 
-This unified design means each highlighting entry is stored once and adjusted once when the document is edited, rather than maintaining two parallel data structures.
+#### Providers: thin adapters over state
+
+`src/providers/` holds seven small classes, one per VS Code provider interface. Each takes `SessionState` (and any other state sources it needs) as constructor args and implements `provide*`:
+
+- `AgdaSemanticTokensProvider` -- maps entries' atoms to standard semantic token types so **all foreground text colors come from the user's theme**. Pull-based; re-fires VS Code's `onDidChangeSemanticTokens` when `state.onDidChange` fires.
+- `AgdaDocumentHighlightProvider` -- regex-based word-occurrence highlighting; takes no state (works even before load).
+- `AgdaRenameProvider` -- semantic-token-based rename (F2).
+- `AgdaDefinitionProvider` -- go-to-definition. For same-file sites uses `LiveDefinitionSite.position` (shifted on edits); for cross-file sites opens the target file and converts the raw offset.
+- `AgdaDocumentSymbolProvider` -- the outline. Delegates to `buildDefTree` and `treeToSymbols` (see [Outline and name-info](#outline-and-name-info) below). `DocumentSymbolProvider` has no `onDidChange` API ([microsoft/vscode#71454](https://github.com/microsoft/vscode/issues/71454)), so the provider owns its own registration and re-registers (debounced) on `state.onDidChange` to force VS Code to re-query.
+- `AgdaHoverProvider` (agda/lagda) -- combines type info (from `getNameInfo`) and unicode abbreviations (from `AbbreviationProvider`) into a single deterministically ordered popup.
+- `GenericHoverProvider` (non-agda/lagda) -- abbreviation info only.
+
+#### DecorationRenderer: push-based rendering
+
+Decorations (backgrounds, underlines, font styles via `ThemeColor`) can't be expressed as semantic tokens, so they go through `TextEditor.setDecorations`. `DecorationRenderer` (`src/editor/decorationRenderer.ts`) owns the decoration types, subscribes to `state.onDidChange` and `vscode.window.onDidChangeActiveTextEditor`, and pushes to visible editors. Keeping this out of `SessionState` means state ingestion has no editor dependency.
+
+#### Definition sites: DefId (opaque identity) + LiveDefinitionSite (live position)
+
+Each entry with a `definitionSite` carries two things:
+
+- **`id: DefId`** -- opaque branded identity (from `src/core/defId.ts`). Minted at ingestion from Agda's reported offset. Never shifted. Used as the key for `nameInfoByUri` and for grouping entries that point to the same definition. The brand prevents all numeric operations at compile time; only `defIdEq` and `Map<DefId, _>` lookups are legal.
+- **`position`** -- for same-file definitions, a live `vscode.Position` shifted by `adjustForEdits` so go-to-definition lands on the correct character after arbitrary edits. For cross-file definitions, the raw `AgdaOffset` is kept instead and converted lazily by `AgdaDefinitionProvider` when it opens the target document.
+
+`isSelfDef` is computed at ingestion (the entry's range start matches its own definition position) and stays stable under edits.
 
 #### Edit adjustment
 
 When the user edits the document, stored highlighting ranges must be adjusted to stay in sync. Two modes are supported (implemented in `src/util/editAdjust.ts`):
 
-- **`adjustForEdits`** -- for arbitrary user edits: ranges that intersect the edited region are removed; ranges after the edit are shifted by the line/character delta.
-- **`expandForGoalMarkers`** -- for the known `?` → `{!!}` expansion during load: intersecting ranges are preserved and grown rather than removed. `HighlightingManager` maintains a per-URI `pendingExpansions` map; `registerPendingExpansions(uri, ranges)` is called before the expansion edit, and `adjustForEdits` consumes matching entries to decide whether to grow or remove intersecting ranges.
+- **`adjustForEdits`** -- for arbitrary user edits: ranges that intersect the edited region are removed; ranges after the edit are shifted by the line/character delta. Same-file `LiveDefinitionSite.position` fields are shifted via `adjustPosition` using the same math. Name-info entries whose self-def was removed are evicted in the same pass.
+- **Pending expansions** -- for the known `?` → `{!!}` expansion during load: intersecting ranges are preserved and grown rather than removed. `SessionState` maintains a per-URI `pendingExpansions` map; `registerPendingExpansions(uri, ranges)` is called before the expansion edit, and `adjustForEdits` consumes matching entries to decide whether to grow or remove intersecting ranges.
+
+### Outline and name-info
+
+The document outline and hover type info are both driven from a shared tree over self-def entries, plus a cache of name/type pairs fetched from Agda after load.
+
+#### `buildDefTree` (`src/providers/defTree.ts`)
+
+Pure function `(entries, document) → DefNode[]`. Produces a forest keyed by `DefId`. Consumed by both the outline provider and `fetchNameInfo` so they agree on structure. Algorithm:
+
+1. Collect one canonical self-def per `DefId` (earliest range wins); drop entries with the `bound` atom and cross-file definition sites.
+2. Sort by source position.
+3. Walk with an indent-column stack. Each entry's effective column is its identifier's column, except for atoms whose containing keyword sits to the left (`module` → `module` keyword, `datatype` → `data`, `record` → `record`, `postulate` → `postulate`, `primitive` → `primitive`) -- for these the effective column is the preceding keyword's column, so e.g. `data Bool` nests children by the `data` column rather than the `Bool` column.
+4. Anonymous `module _ (params) where` entries (atom `module`, name `_`) are skipped but still pop the stack, hoisting their children into the surrounding scope. This matches Agda's semantic merging: anonymous modules are a parameter-sharing tool, not a structural container -- their contents appear at the outer module's scope (with the params prepended to each member's type).
+
+`walkDefTree(tree)` is a depth-first iterator used by the name-info matcher to flatten a subtree when building a name → DefId lookup.
+
+#### `fetchNameInfo` (`src/editor/commands.ts`)
+
+Runs after a successful `Cmd_load`. Its responsibility is to populate `sessionState.nameInfoByUri` so the outline and hover can attach types to their entries. It bypasses `processBatchedResponses` (so the `ModuleContents` response doesn't surface in the info panel) and goes through the command queue directly.
+
+1. Issue `Cmd_show_module_contents_toplevel ""` to get the file's top-level contents (everything visible at module scope -- including constructors re-exported from data types and anonymous-module-merged definitions).
+2. Build the def tree from the current entries.
+3. Flat-walk the whole tree to build a name → DefId map, then match the response's `contents` array against it. Matched entries go into `nameInfoByUri` via `sessionState.setNameInfo`; matched IDs are added to a local `addedIds` set for dedup.
+4. For each name in the response's `names` list (sub-namespaces -- records, data types as namespaces, nested modules), look up the corresponding tree node via a flat-walk lookup (not just roots -- the namespace may live inside an anonymous module). Fetch its contents via another `Cmd_show_module_contents_toplevel <name>` and match against _that_ node's subtree. Scope-limited matching prevents two records that share a field name (e.g. both have `fst`) from clobbering each other. Recursion stops at one level deep.
+
+The name-matching logic lives in `src/providers/nameMatching.ts` (`displayType`, `buildNameToIdMap`, `matchContents`) so it can be unit-tested without a live Agda process.
+
+**What Agda won't surface**: where-clause locals (defined inside a function's `where`). Agda's interaction protocol has no command that exposes them: `Cmd_show_module_contents_toplevel <funcName>` fails with `ShouldBeRecordType`; qualified infers (`funcName.localName`) return `NotInScope`. The outline prunes them for the same reason (see below); hover silently returns no type for them.
+
+**What Agda won't surface for modules**: module telescopes are always empty in the `ModuleContents` response (Agda 2.8).
+
+#### `treeToSymbols` (`src/providers/documentSymbols.ts`)
+
+Pure function `(document, tree, getNameInfo) → DocumentSymbol[]`. Maps atoms to `SymbolKind` (function → Function, datatype → Class, record → Struct, constructor → Constructor, field → Field, module → Namespace, postulate → Variable). Attaches `NameInfo.type` as the symbol detail. **Prunes children of function-like nodes** (`function`, `macro` atoms) so where-clause locals don't clutter the outline -- they're purely local and Agda can't give us types for them anyway. Non-function parents (records, data types, modules) keep their children, so private let-bindings inside records (atom `function`, but parent `record`) still appear.
 
 ### Goals
 
@@ -210,7 +278,12 @@ Rather than writing a custom Unicode input system, we adapted the abbreviation e
 - **`AbbreviationRewriter`**: Core state machine tracking active abbreviations, deciding when to replace. Takes a leader character string and an `AbbreviationTextSource` abstraction.
 - **`TrackedAbbreviation`**: Represents one in-progress abbreviation (its range, current text, matched symbols)
 
-The VS Code integration layer (`VSCodeAbbreviationRewriter`, `AbbreviationRewriterFeature`, `AbbreviationFeature`) adapts the engine to VS Code's APIs -- listening to document changes and selection changes, applying edits, managing per-editor lifecycle. The `AbbreviationProvider` and status bar item are created once in `extension.ts` and shared between the editor rewriter and the InputBox.
+The VS Code integration layer adapts the engine to VS Code's APIs -- listening to document changes and selection changes, applying edits, managing per-editor lifecycle:
+
+- `VSCodeAbbreviationRewriter` and `AbbreviationRewriterFeature` (in `src/unicode/`) manage the in-editor rewriter lifecycle.
+- `GenericHoverProvider` (in `src/providers/hover.ts`) shows abbreviation info on hover for non-agda/lagda languages. For agda/lagda, `AgdaHoverProvider` (same file) covers the same source alongside type info.
+
+The `AbbreviationProvider` and status bar item are created once in `extension.ts` and shared across the editor rewriter, both hover providers, and the InputBox.
 
 ### InputBox abbreviation support
 
@@ -314,6 +387,6 @@ Begin by running `npm install`.
 
 The extension is bundled with **esbuild** (`esbuild.js`): `src/extension.ts` → `dist/extension.js` as CommonJS (required by VS Code), with `vscode` as an external. `--watch` mode is available for development.
 
-Tests use **vitest** (`vitest.config.mts`) with a mock VS Code API (`test/__mocks__/vscode.ts`). Run with `npx vitest run` (308 tests across 15 files). Tests cover offsets, positions, edit adjustment, goals, highlighting, cursor positioning, info panel rendering, abbreviation engine, InputBox abbreviation support, version comparison, and location parsing.
+Tests use **vitest** (`vitest.config.mts`) with a mock VS Code API (`test/__mocks__/vscode.ts`). Run with `npx vitest run` (361 tests across 18 files). Tests cover offsets, positions, edit adjustment, goals, highlighting, def tree construction, name matching, outline symbol derivation, cursor positioning, info panel rendering, abbreviation engine, InputBox abbreviation support, version comparison, and location parsing.
 
 `scripts/generate-abbreviations.py` regenerates `src/unicode/abbreviations.json` from Agda's Emacs input method by driving Emacs in batch mode to dump the `agda-input` translation table.

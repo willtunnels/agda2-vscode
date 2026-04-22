@@ -1115,6 +1115,11 @@
           "default": true,
           "description": "Show goal ID labels (?0, ?1, ...) next to interaction points"
         },
+        "agda.outline.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Compute the document outline and hover information for types (disabling might improve performance)"
+        },
         "agda.reloadOnGive": {
           "type": "boolean",
           "default": false,

@@ -10,6 +10,7 @@ const EXTRA_ARGS = "agda.extraArgs";
 const BACKEND = "agda.backend";
 const ADDITIONAL_PATHS = "agda.additionalPaths";
 const GOAL_LABELS = "agda.goalLabels";
+const OUTLINE_ENABLED = "agda.outline.enabled";
 const RELOAD_ON_GIVE = "agda.reloadOnGive";
 
 function get<T>(key: string, fallback: T): T {
@@ -23,8 +24,8 @@ function mostSpecificTarget(
   return inspected?.workspaceFolderValue !== undefined
     ? vscode.ConfigurationTarget.WorkspaceFolder
     : inspected?.workspaceValue !== undefined
-    ? vscode.ConfigurationTarget.Workspace
-    : vscode.ConfigurationTarget.Global;
+      ? vscode.ConfigurationTarget.Workspace
+      : vscode.ConfigurationTarget.Global;
 }
 
 // Getters
@@ -43,9 +44,7 @@ export function getInputLanguages(): string[] {
 
 export function getCustomTranslations(): SymbolsByAbbreviation {
   const raw = get<Record<string, string | string[]>>(INPUT_CUSTOM_TRANSLATIONS, {});
-  return Object.fromEntries(
-    Object.entries(raw).map(([k, v]) => [k, Array.isArray(v) ? v : [v]]),
-  );
+  return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, Array.isArray(v) ? v : [v]]));
 }
 
 export function getAgdaPath(): string {
@@ -68,6 +67,10 @@ export function getGoalLabels(): boolean {
   return get<boolean>(GOAL_LABELS, true);
 }
 
+export function getOutlineEnabled(): boolean {
+  return get<boolean>(OUTLINE_ENABLED, true);
+}
+
 export function getReloadOnGive(): boolean {
   return get<boolean>(RELOAD_ON_GIVE, false);
 }
@@ -86,12 +89,14 @@ const inputLeaderEmitter = new vscode.EventEmitter<void>();
 const inputLanguagesEmitter = new vscode.EventEmitter<void>();
 const customTranslationsEmitter = new vscode.EventEmitter<void>();
 const goalLabelsEmitter = new vscode.EventEmitter<void>();
+const outlineEnabledEmitter = new vscode.EventEmitter<void>();
 
 export const onInputEnabledChanged = inputEnabledEmitter.event;
 export const onInputLeaderChanged = inputLeaderEmitter.event;
 export const onInputLanguagesChanged = inputLanguagesEmitter.event;
 export const onCustomTranslationsChanged = customTranslationsEmitter.event;
 export const onGoalLabelsChanged = goalLabelsEmitter.event;
+export const onOutlineEnabledChanged = outlineEnabledEmitter.event;
 
 /** Register the single onDidChangeConfiguration listener. Call once from activate(). */
 export function init(): vscode.Disposable {
@@ -101,6 +106,7 @@ export function init(): vscode.Disposable {
     if (e.affectsConfiguration(INPUT_LANGUAGES)) inputLanguagesEmitter.fire();
     if (e.affectsConfiguration(INPUT_CUSTOM_TRANSLATIONS)) customTranslationsEmitter.fire();
     if (e.affectsConfiguration(GOAL_LABELS)) goalLabelsEmitter.fire();
+    if (e.affectsConfiguration(OUTLINE_ENABLED)) outlineEnabledEmitter.fire();
   });
   return vscode.Disposable.from(
     sub,
@@ -109,5 +115,6 @@ export function init(): vscode.Disposable {
     inputLanguagesEmitter,
     customTranslationsEmitter,
     goalLabelsEmitter,
+    outlineEnabledEmitter,
   );
 }

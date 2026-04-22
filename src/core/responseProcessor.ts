@@ -55,7 +55,7 @@ export interface ResponseProcessorCallbacks {
 
   /**
    * Register ranges that are about to be expanded (? → {!  !}).
-   * Called before the edit so the highlighting manager can grow
+   * Called before the edit so the session state can grow
    * intersecting ranges instead of removing them.
    */
   registerPendingExpansions(ranges: vscode.Range[]): void;

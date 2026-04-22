@@ -2,16 +2,23 @@ import * as vscode from "vscode";
 import { AgdaProcess } from "./agda/process.js";
 import { CommandQueue } from "./core/commandQueue.js";
 import { GoalManager } from "./core/goals.js";
-import { HighlightingManager, SEMANTIC_LEGEND } from "./core/highlighting.js";
+import { SessionState } from "./core/sessionState.js";
 import { WorkspaceState } from "./core/state.js";
 import { registerCommands, ShowInputBox } from "./editor/commands.js";
+import { DecorationRenderer } from "./editor/decorationRenderer.js";
 import { InfoPanel } from "./editor/infoPanel.js";
 import { registerKeySequenceCommands } from "./editor/keySequence.js";
-import { AbbreviationFeature } from "./unicode/AbbreviationFeature.js";
+import { AgdaDefinitionProvider } from "./providers/definition.js";
+import { AgdaDocumentHighlightProvider } from "./providers/documentHighlights.js";
+import { AgdaDocumentSymbolProvider } from "./providers/documentSymbols.js";
+import { AgdaHoverProvider, GenericHoverProvider } from "./providers/hover.js";
+import { AgdaRenameProvider } from "./providers/rename.js";
+import { AgdaSemanticTokensProvider } from "./providers/semanticTokens.js";
+import { AbbreviationRewriterFeature } from "./unicode/AbbreviationRewriterFeature.js";
 import { AbbreviationProvider } from "./unicode/engine/AbbreviationProvider.js";
 import { showUnicodeInputBox } from "./editor/unicodeInputBox.js";
 import * as config from "./util/config.js";
-import { agdaOffsetToPosition } from "./util/position.js";
+import { SEMANTIC_LEGEND } from "./util/semanticTokens.js";
 import { computeSingleChange, reconstructPreText } from "./util/editAdjust.js";
 
 const enum TextDocumentChangeReason {
@@ -24,18 +31,44 @@ export function activate(context: vscode.ExtensionContext): void {
   const agdaProcess = new AgdaProcess(outputChannel);
   const commandQueue = new CommandQueue(agdaProcess);
   const goals = new GoalManager();
-  const highlighting = new HighlightingManager();
+  const sessionState = new SessionState();
+  const decorationRenderer = new DecorationRenderer(sessionState);
   const workspaceState = new WorkspaceState();
   const infoPanel = new InfoPanel(outputChannel, context.extensionUri);
 
+  const selector: vscode.DocumentSelector = { language: "agda" };
   context.subscriptions.push(
     vscode.languages.registerDocumentSemanticTokensProvider(
-      { language: "agda" },
-      highlighting,
+      selector,
+      new AgdaSemanticTokensProvider(sessionState),
       SEMANTIC_LEGEND,
     ),
-    vscode.languages.registerDocumentHighlightProvider({ language: "agda" }, highlighting),
-    vscode.languages.registerRenameProvider({ language: "agda" }, highlighting),
+    vscode.languages.registerDocumentHighlightProvider(
+      selector,
+      new AgdaDocumentHighlightProvider(),
+    ),
+    vscode.languages.registerRenameProvider(selector, new AgdaRenameProvider(sessionState)),
+    vscode.languages.registerDefinitionProvider(selector, new AgdaDefinitionProvider(sessionState)),
+  );
+
+  // DocumentSymbolProvider has no onDidChange event, so the provider owns
+  // its registration and re-registers on state changes to force refresh.
+  // Gated by agda.outline.enabled so the post-load name/type fetch can be
+  // skipped entirely on large projects.
+  let outlineProvider: AgdaDocumentSymbolProvider | undefined = config.getOutlineEnabled()
+    ? new AgdaDocumentSymbolProvider(sessionState, selector)
+    : undefined;
+  context.subscriptions.push(
+    config.onOutlineEnabledChanged(() => {
+      const enabled = config.getOutlineEnabled();
+      if (enabled && !outlineProvider) {
+        outlineProvider = new AgdaDocumentSymbolProvider(sessionState, selector);
+      } else if (!enabled && outlineProvider) {
+        outlineProvider.dispose();
+        outlineProvider = undefined;
+      }
+    }),
+    { dispose: () => outlineProvider?.dispose() },
   );
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -49,19 +82,43 @@ export function activate(context: vscode.ExtensionContext): void {
     200,
   );
 
-  // We want to share the same AbbreviationProvider across the AbbreviationFeature and any other UI
-  // elements with unicode input, so that the last-selected cycle index is consistent. It is also
-  // convenient to only have one thing to register an onDidChangeConfiguration listener for.
-  const abbreviationFeature = new AbbreviationFeature(abbreviationProvider, abbreviationStatusBar);
+  // We share the same AbbreviationProvider across every UI surface that cares
+  // about unicode input (hovers, rewriter, input boxes), so that the
+  // last-selected cycle index is consistent across them.
   const showInputBox: ShowInputBox = (options) =>
     showUnicodeInputBox(abbreviationProvider, abbreviationStatusBar, options);
+
+  // Hover for unicode abbreviations on non-agda/lagda languages. agda/lagda are
+  // served by AgdaHoverProvider, which combines type info and abbreviation info
+  // into a single deterministically ordered popup.
+  const abbrevHoverSelector = () =>
+    config.getInputLanguages().filter((id) => id !== "agda" && id !== "lagda");
+  let abbrevHoverRegistration = vscode.languages.registerHoverProvider(
+    abbrevHoverSelector(),
+    new GenericHoverProvider(abbreviationProvider),
+  );
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(
+      selector,
+      new AgdaHoverProvider(sessionState, abbreviationProvider),
+    ),
+    config.onInputLanguagesChanged(() => {
+      abbrevHoverRegistration.dispose();
+      abbrevHoverRegistration = vscode.languages.registerHoverProvider(
+        abbrevHoverSelector(),
+        new GenericHoverProvider(abbreviationProvider),
+      );
+    }),
+    { dispose: () => abbrevHoverRegistration.dispose() },
+    new AbbreviationRewriterFeature(abbreviationProvider, abbreviationStatusBar),
+  );
 
   registerKeySequenceCommands(context);
   registerCommands(context, {
     process: agdaProcess,
     queue: commandQueue,
     goals,
-    highlighting,
+    sessionState,
     workspaceState,
     statusBar,
     infoPanel,
@@ -70,33 +127,6 @@ export function activate(context: vscode.ExtensionContext): void {
     extensionUri: context.extensionUri,
     showInputBox,
   });
-
-  context.subscriptions.push(
-    vscode.languages.registerDefinitionProvider(
-      { language: "agda" },
-      {
-        async provideDefinition(
-          document: vscode.TextDocument,
-          position: vscode.Position,
-        ): Promise<vscode.Location | undefined> {
-          const site = highlighting.getDefinitionSite(document.uri.toString(), position);
-          if (!site) return undefined;
-
-          const targetUri = vscode.Uri.file(site.filepath);
-          // Agda's position is a 1-based code-point offset in the target file.
-          // We need to open the document to convert offset to line/col.
-          try {
-            const targetDoc = await vscode.workspace.openTextDocument(targetUri);
-            const targetPos = agdaOffsetToPosition(targetDoc, site.position);
-            return new vscode.Location(targetUri, targetPos);
-          } catch {
-            // If we can't open the file, return position 0,0 as fallback
-            return new vscode.Location(targetUri, new vscode.Position(0, 0));
-          }
-        },
-      },
-    ),
-  );
 
   context.subscriptions.push(
     commandQueue.onBusyChange((busy) => {
@@ -109,7 +139,6 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       if (editor && editor.document.languageId === "agda") {
-        highlighting.reapply(editor);
         goals.applyDecorations(editor);
       }
     }),
@@ -157,7 +186,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (e.document.languageId === "agda" && e.contentChanges.length > 0) {
         const uri = e.document.uri.toString();
         // Highlighting always adjusts per-change (it just shifts/removes)
-        highlighting.adjustForEdits(uri, e.contentChanges);
+        sessionState.adjustForEdits(uri, e.contentChanges);
 
         // Goal adjustment: collate undo changes into a single merged edit
         const goalChanges = (() => {
@@ -197,7 +226,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidCloseTextDocument((document) => {
       if (document.languageId === "agda") {
         const uri = document.uri.toString();
-        highlighting.clear(uri);
+        sessionState.clear(uri);
         goals.clear(uri);
       }
     }),
@@ -205,12 +234,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     abbreviationStatusBar,
-    abbreviationFeature,
 
     agdaProcess,
     commandQueue,
     goals,
-    highlighting,
+    sessionState,
+    decorationRenderer,
     workspaceState,
     infoPanel,
     statusBar,

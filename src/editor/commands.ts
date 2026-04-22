@@ -2,7 +2,12 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 import type { TextEditor } from "vscode";
 import type { AgdaProcess } from "../agda/process.js";
-import type { AgdaResponse, HighlightingPayload, Solution } from "../agda/responses.js";
+import type {
+  AgdaResponse,
+  DisplayInfo,
+  HighlightingPayload,
+  Solution,
+} from "../agda/responses.js";
 import { convertDisplayInfo } from "../util/agdaLocation.js";
 import {
   cmdLoad,
@@ -52,7 +57,9 @@ import {
   goalCursorPosition,
   MAKE_CASE_CURSOR_OFFSET,
 } from "../core/goals.js";
-import { HighlightingManager } from "../core/highlighting.js";
+import { SessionState } from "../core/sessionState.js";
+import { buildDefTree } from "../providers/defTree.js";
+import { collectNameInfo } from "../providers/nameMatching.js";
 import { WorkspaceState } from "../core/state.js";
 import {
   processBatchedResponses,
@@ -117,7 +124,7 @@ export interface Services {
   process: AgdaProcess;
   queue: CommandQueue;
   goals: GoalManager;
-  highlighting: HighlightingManager;
+  sessionState: SessionState;
   workspaceState: WorkspaceState;
   statusBar: vscode.StatusBarItem;
   infoPanel: InfoPanel;
@@ -151,7 +158,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     process: agda,
     queue,
     goals,
-    highlighting,
+    sessionState,
     workspaceState,
     statusBar,
     infoPanel,
@@ -224,13 +231,69 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
   async function reload(editor: TextEditor, filepath: string): Promise<void> {
     goals.clear(editor.document.uri.toString());
     goals.clearDecorations(editor);
-    highlighting.clearAll(editor);
+    sessionState.clear(editor.document.uri.toString());
     await editor.document.save();
     statusBar.text = "$(loading~spin) Agda: Loading...";
     await runCommand(cmdLoad(filepath, config.getExtraArgs()), editor, filepath);
     const state = workspaceState.getOrCreate(filepath);
     state.loaded = true;
     state.dirty = false;
+    // Populate name/type info for outline + hover. Best-effort; non-fatal.
+    // Gated by agda.outline.enabled -- the Agda round-trip is the main cost
+    // this setting is designed to avoid.
+    if (config.getOutlineEnabled()) {
+      await fetchNameInfo(editor, filepath);
+    }
+  }
+
+  /**
+   * Post-load follow-up: ask Agda for the current module's name-type pairs
+   * (plus those of nested modules/records, recursively) and store them on
+   * the session state keyed by DefId. Bypasses processBatchedResponses so
+   * the ModuleContents DisplayInfo doesn't also surface in the info panel.
+   *
+   * Recursion policy is defined in collectNameInfo: descend into every
+   * module/record whose def-tree subtree has children, skip data types (their
+   * constructors are captured at the enclosing scope), and skip empty
+   * containers to avoid wasted round-trips.
+   */
+  async function fetchNameInfo(editor: TextEditor, filepath: string): Promise<void> {
+    try {
+      const uri = editor.document.uri.toString();
+      const tree = buildDefTree(sessionState.getEntries(uri), editor.document);
+      const nameInfo = await collectNameInfo(editor.document, tree, async (qname) => {
+        const mc = await fetchModuleContents(filepath, qname);
+        return mc ? { contents: mc.contents, names: mc.names } : undefined;
+      });
+      sessionState.setNameInfo(uri, nameInfo);
+    } catch (e) {
+      outputChannel.appendLine(`[warn] Failed to fetch name info: ${getErrorMessage(e)}`);
+    }
+  }
+
+  /**
+   * Send Cmd_show_module_contents_toplevel for `moduleName` (empty string =
+   * current module) and return the first ModuleContents DisplayInfo, or
+   * undefined on error / no match. Catches so one failed sub-namespace fetch
+   * doesn't abort the whole pass.
+   */
+  async function fetchModuleContents(
+    filepath: string,
+    moduleName: string,
+  ): Promise<Extract<DisplayInfo, { kind: "ModuleContents" }> | undefined> {
+    try {
+      const result = await queue.enqueue(
+        cmdShowModuleContentsToplevel(filepath, moduleName, "Simplified"),
+      );
+      for (const r of result.responses) {
+        if (r.kind === "DisplayInfo" && r.info.kind === "ModuleContents") return r.info;
+      }
+    } catch (e) {
+      outputChannel.appendLine(
+        `[warn] show_module_contents ${JSON.stringify(moduleName)} failed: ${getErrorMessage(e)}`,
+      );
+    }
+    return undefined;
   }
 
   /** Get the goal at the cursor, or show "No goal at cursor". */
@@ -268,12 +331,12 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
       switch (response.kind) {
         case "HighlightingInfo":
           if (response.direct) {
-            highlighting.applyHighlighting(editor, response.info, errorOverride);
+            sessionState.applyHighlighting(editor.document, response.info, errorOverride);
           } else {
             try {
               const content = fs.readFileSync(response.filepath, "utf-8");
               const payload = JSON.parse(content) as HighlightingPayload;
-              highlighting.applyHighlighting(editor, payload, errorOverride);
+              sessionState.applyHighlighting(editor.document, payload, errorOverride);
               // Delete the temp file as Agda expects
               fs.unlinkSync(response.filepath);
             } catch (e) {
@@ -293,9 +356,9 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
           break;
         case "ClearHighlighting":
           if (response.tokenBased === "TokenBased") {
-            highlighting.clearTokenBased(editor);
+            sessionState.clearTokenBased(editor.document.uri.toString());
           } else {
-            highlighting.clearAll(editor);
+            sessionState.clear(editor.document.uri.toString());
           }
           break;
       }
@@ -311,7 +374,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     const docEditor = new VscodeDocumentEditor(editor);
     const callbacks: ResponseProcessorCallbacks = {
       registerPendingExpansions(ranges) {
-        highlighting.registerPendingExpansions(editor.document.uri.toString(), ranges);
+        sessionState.registerPendingExpansions(editor.document.uri.toString(), ranges);
       },
       onStatus(checked) {
         if (checked) statusBar.text = "$(check) Agda: Checked";
@@ -754,7 +817,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Ser
     resetSequence();
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.languageId !== "agda") return;
-    highlighting.clearAll(editor);
+    sessionState.clear(editor.document.uri.toString());
     goals.clear(editor.document.uri.toString());
     goals.clearDecorations(editor);
     infoPanel.clear();

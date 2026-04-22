@@ -77,6 +77,23 @@ function shiftPosition(
 }
 
 // ---------------------------------------------------------------------------
+// Position adjustment (for a single point tracked across edits)
+// ---------------------------------------------------------------------------
+
+/**
+ * Shift a Position by an edit.
+ *
+ *  - Position strictly before the edit: unchanged.
+ *  - Position at or inside the edit range: clamped to the edit start.
+ *  - Position at or after the edit end: shifted by line/char delta.
+ */
+export function adjustPosition(position: vscode.Position, edit: EditParams): vscode.Position {
+  if (position.isBefore(edit.editRange.start)) return position;
+  if (position.isBefore(edit.editRange.end)) return edit.editRange.start;
+  return shiftPosition(position, edit.editRange.end, edit.lineDelta, edit.newEndChar);
+}
+
+// ---------------------------------------------------------------------------
 // Range adjustment (for arbitrary edits -- removes intersecting ranges)
 // ---------------------------------------------------------------------------
 
@@ -192,10 +209,7 @@ export function commonPrefixSuffix(a: string, b: string): { prefix: number; suff
   while (prefix < minLen && a[prefix] === b[prefix]) prefix++;
 
   let suffix = 0;
-  while (
-    suffix < minLen - prefix &&
-    a[a.length - 1 - suffix] === b[b.length - 1 - suffix]
-  )
+  while (suffix < minLen - prefix && a[a.length - 1 - suffix] === b[b.length - 1 - suffix])
     suffix++;
 
   return { prefix, suffix };
@@ -212,7 +226,7 @@ export function commonPrefixSuffix(a: string, b: string): { prefix: number; suff
  * that looks like an interior insertion ("id ?" between the matching `{!` and `!}`), so
  * adjustRangeContaining grows the goal instead of removing it. Shrinking the prefix to before the
  * unmatched `{!` makes the diff cross the delimiter boundary.
- * 
+ *
  * Returns null if the texts are identical (no change).
  */
 export function computeSingleChange(

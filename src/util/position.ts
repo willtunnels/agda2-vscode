@@ -45,3 +45,11 @@ export function positionToAgdaOffset(
   const utf16Offset = document.offsetAt(position);
   return utf16OffsetToAgdaCp(t, utf16Offset);
 }
+
+/**
+ * Half-open range check: true when start <= position < end.
+ * VSCode's Range.contains is closed (start <= position <= end).
+ */
+export function rangeContains(range: vscode.Range, position: vscode.Position): boolean {
+  return range.start.isBeforeOrEqual(position) && position.isBefore(range.end);
+}

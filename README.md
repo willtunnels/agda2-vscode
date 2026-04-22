@@ -185,6 +185,8 @@ Hover over any Unicode character in an Agda file to see which abbreviations prod
 | `agda.input.languages`          | `["agda"]` | Languages in which Unicode input is enabled                                                          |
 | `agda.input.customTranslations` | `{}`       | Custom abbreviation overrides (key: abbreviation, value: symbol or array of symbols for Tab-cycling) |
 | `agda.goalLabels`               | `true`     | Show goal ID labels (`?0`, `?1`, ...) next to interaction points                                     |
+| `agda.outline.enable`           | `true`     | Compute the document outline and hover information for types (disabling might improve performance)   |
+| `agda.reloadOnGive`             | `false`    | Automatically reload the file after give or refine actions                                           |
 
 ## Comparison with `banacorn/agda2-mode-vscode`
 

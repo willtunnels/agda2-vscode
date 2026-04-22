@@ -26,7 +26,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Range, Position } from "vscode";
 import { GoalManager, expandQuestionMarks, GOAL_MARKER } from "../src/core/goals.js";
-import { HighlightingManager } from "../src/core/highlighting.js";
+import { SessionState } from "../src/core/sessionState.js";
+import { AgdaSemanticTokensProvider } from "../src/providers/semanticTokens.js";
 import { toAgdaOffset } from "../src/util/offsets.js";
 import type { InteractionPointWithRange, HighlightingPayload } from "../src/agda/responses.js";
 
@@ -137,11 +138,11 @@ const INITIAL_TEXT = [
 
 describe("give-with-question-mark bug", () => {
   let gm: GoalManager;
-  let hm: HighlightingManager;
+  let ss: SessionState;
 
   beforeEach(() => {
     gm = new GoalManager();
-    hm = new HighlightingManager();
+    ss = new SessionState();
   });
 
   /**
@@ -186,7 +187,7 @@ describe("give-with-question-mark bug", () => {
     // Simulate onDidChangeTextDocument handler
     const editChange = change(goal0Range, replacement);
     gm.adjustForEdits(uri, [editChange]);
-    hm.adjustForEdits(uri, [editChange]);
+    ss.adjustForEdits(uri, [editChange]);
 
     // Build the InteractionPoints as Agda sees them: the give replaced
     // {! ? !} (7 chars) with "?" (1 char), shifting everything after by -6.
@@ -284,7 +285,7 @@ describe("give-with-question-mark bug", () => {
     for (const range of questionMarks) {
       doc._replaceRange(range, GOAL_MARKER);
       gm.adjustForEdits(uri, [change(range, GOAL_MARKER)]);
-      hm.adjustForEdits(uri, [change(range, GOAL_MARKER)]);
+      ss.adjustForEdits(uri, [change(range, GOAL_MARKER)]);
     }
 
     // Step 3: updateGoals with forceScan=true
@@ -316,8 +317,7 @@ describe("give-with-question-mark bug", () => {
     // Apply initial highlighting for "thing" on line 7
     const thingStart = text.indexOf("thing : {!");
     const thingEnd = thingStart + "thing".length;
-    const mockEditor = { document: doc, setDecorations: () => {} } as any;
-    hm.applyHighlighting(mockEditor, {
+    ss.applyHighlighting(doc, {
       remove: false,
       payload: [
         {
@@ -340,7 +340,7 @@ describe("give-with-question-mark bug", () => {
     const agdaThingStart = thingStart + 1 - agdaShrink;
     const agdaThingEnd = thingEnd + 1 - agdaShrink;
 
-    hm.applyHighlighting(mockEditor, {
+    ss.applyHighlighting(doc, {
       remove: true,
       payload: [
         {
@@ -354,7 +354,7 @@ describe("give-with-question-mark bug", () => {
     });
 
     // The highlighting should land at the correct position
-    const tokens = hm.provideDocumentSemanticTokens(doc);
+    const tokens = new AgdaSemanticTokensProvider(ss).provideDocumentSemanticTokens(doc);
     expect(tokens.data.length).toBeGreaterThanOrEqual(5);
 
     const tokenLine = tokens.data[0];

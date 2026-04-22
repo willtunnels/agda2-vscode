@@ -15,6 +15,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { mapCursorThroughEdit } from "../src/core/responseProcessor.js";
 import type { AgdaResponse } from "../src/agda/responses.js";
+import { toAgdaOffset } from "../src/util/offsets.js";
 import { spawnAgda, haskellStringQuote } from "./helpers/agdaSession.js";
 
 // ---------------------------------------------------------------------------
@@ -404,8 +405,8 @@ describe("Paren give expands ? in goal content", () => {
             id: 0,
             range: [
               {
-                start: { pos: goalStart + 1, line: 1, col: goalStart + 1 },
-                end: { pos: goalEnd + 1, line: 1, col: goalEnd + 1 },
+                start: { pos: toAgdaOffset(goalStart + 1), line: 1, col: goalStart + 1 },
+                end: { pos: toAgdaOffset(goalEnd + 1), line: 1, col: goalEnd + 1 },
               },
             ],
           },
@@ -453,8 +454,8 @@ describe("Paren give expands ? in goal content", () => {
             id: 0,
             range: [
               {
-                start: { pos: goalStart + 1, line: 1, col: goalStart + 1 },
-                end: { pos: goalEnd + 1, line: 1, col: goalEnd + 1 },
+                start: { pos: toAgdaOffset(goalStart + 1), line: 1, col: goalStart + 1 },
+                end: { pos: toAgdaOffset(goalEnd + 1), line: 1, col: goalEnd + 1 },
               },
             ],
           },
@@ -517,8 +518,8 @@ describe("Give then undo removes goal", () => {
           id: 0,
           range: [
             {
-              start: { pos: goalStart + 1, line: 1, col: goalStart + 1 },
-              end: { pos: goalEnd + 1, line: 1, col: goalEnd + 1 },
+              start: { pos: toAgdaOffset(goalStart + 1), line: 1, col: goalStart + 1 },
+              end: { pos: toAgdaOffset(goalEnd + 1), line: 1, col: goalEnd + 1 },
             },
           ],
         },
