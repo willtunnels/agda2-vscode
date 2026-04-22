@@ -2,6 +2,11 @@
   <img src="./icon.png" width="128" />
 </p>
 
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=bdrisc.agda2-vscode"><img src="https://vsmarketplacebadges.dev/installs-short/bdrisc.agda2-vscode.svg?label=VS%20Marketplace%20Installs&style=flat" alt="VS Marketplace Installs" /></a>
+  <a href="https://open-vsx.org/extension/bdrisc/agda2-vscode"><img src="https://img.shields.io/open-vsx/dt/bdrisc/agda2-vscode?label=Open%20VSX%20Downloads" alt="Open VSX Downloads" /></a>
+</p>
+
 Interactive development for Agda >= 2.6.1. This extension communicates directly with Agda via `--interaction-json` for a responsive feel, similar to `agda2-mode` for Emacs.
 
 This extension can download recent versions of Agda for all major platforms, so you do not need a preexisting Agda install.
@@ -11,8 +16,9 @@ This extension can download recent versions of Agda for all major platforms, so 
 - **All Agda commands**: we support load, give, refine, auto, case split, solve, compile, etc.
 - **Unicode input**: type `\` followed by an abbreviation to insert Unicode characters
 - **Semantic highlighting**: foreground colors from your theme via semantic tokens; background decorations for unsolved metas, termination problems, coverage issues, etc.
-- **Go-to-definition**: Ctrl+Click or F12 to jump to the definition site of any highlighted name
 - **Info panel**: persistent side panel showing goal types, context, errors, and other Agda output
+- **Outline**: populates VSCode's document outline to provide an overview of the modules, records, types and terms in the current file
+- **Go-to-definition**: Ctrl+Click or F12 to jump to the definition site of any highlighted name
 - **VSCodeVim integration**: interacts correctly with VSCodeVim, e.g., accounts for VSCodeVim's bespoke undo/redo mechanism when adjusting goal spans
 
 ## Keybindings
