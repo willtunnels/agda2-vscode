@@ -60,52 +60,20 @@ export function mapOffsetThroughChanges(offset: number, sortedChanges: Change[])
  * State machine for abbreviation tracking and replacement abstracted over
  * the text source (input box, editor, etc.).
  *
- * Each abbreviation goes through two phases:
- *   1. **Typing** — the user is building `\text` character by character.
- *   2. **Replaced / cycling** — `\text` has been eagerly replaced with a
- *      symbol; Tab/Shift+Tab cycles through alternatives.
- *
- * All state changes (extend, shorten, cycle) update abbreviation state
- * synchronously. A single {@link flushDirty} method computes the diff
- * and applies one batch document edit.
+ * The engine is reconciliation-based. Every tracked abbreviation maintains
+ * `shown` (the exact document content of its span) and derives `desired`
+ * (what the span should show). Event handlers only update abbreviation
+ * fields; {@link flushDirty} makes the document satisfy `desired` for every
+ * tracked abbreviation in one batch edit, then drops the non-active ones.
  *
  * All actual document edits are delegated to an {@link AbbreviationTextSource}.
  */
 export class AbbreviationRewriter {
-  /** All tracked abbreviations (disjoint ranges). */
+  /** All tracked abbreviations (disjoint spans). */
   private readonly trackedAbbreviations = new Set<TrackedAbbreviation>();
 
   /** Set during our own edits so the engine doesn't track replacement text as a new `\`. */
   private doNotTrackNewAbbr = false;
-
-  /**
-   * Typing-mode abbreviations that are done (cursor moved away, or a
-   * non-extending character was typed). The document still shows `\text`;
-   * flushDirty() replaces it with the symbol and removes them from tracking.
-   */
-  private readonly _finishedAbbreviations = new Set<TrackedAbbreviation>();
-
-  /**
-   * Replaced abbreviations that were both dirty and finalized in the same
-   * change batch. For example, the user extends an abbreviation (marking it
-   * dirty) then types a non-extending character (finalizing it).
-   * removeFromTracking() clears dirtyAbbreviations, so without this set the
-   * pending document update would be lost.
-   */
-  private readonly _finalizedDirty = new Set<TrackedAbbreviation>();
-
-  /**
-   * Replaced-mode abbreviations whose in-memory state (cycle index,
-   * extension text) differs from what's in the document. flushDirty()
-   * writes the current symbol to the document and clears the flag.
-   */
-  private readonly dirtyAbbreviations = new Set<TrackedAbbreviation>();
-
-  /**
-   * Abbreviations to delete entirely (Ctrl+Backspace). flushDirty()
-   * replaces their range with empty text and removes them from tracking.
-   */
-  private readonly _deletedAbbreviations = new Set<TrackedAbbreviation>();
 
   constructor(
     private readonly abbreviationCharacter: string,
@@ -123,76 +91,65 @@ export class AbbreviationRewriter {
   }
 
   /**
-   * Mark any tracked abbreviation that no longer contains a cursor for finalization.
-   * Replaced abbreviations are removed from tracking immediately (symbol is already
-   * in the document). Typing-mode abbreviations are added to `_finishedAbbreviations`
-   * for replacement by {@link flushDirty}.
+   * Mark any active abbreviation that no longer contains a cursor as
+   * finished. The next {@link flushDirty} reconciles its span (writing any
+   * pending symbol/revert) and drops it from tracking.
    */
   changeSelections(selections: Range[]) {
-    const toFinalize = [...this.trackedAbbreviations].filter(
-      (abbr) => !selections.some((s) => abbr.range.containsRange(s.withLength(0))),
-    );
-    for (const abbr of toFinalize) {
-      if (abbr.isReplaced) {
-        this.removeFromTracking(abbr);
-      } else {
-        this._finishedAbbreviations.add(abbr);
+    for (const abbr of this.trackedAbbreviations) {
+      if (
+        abbr.status === "active" &&
+        !selections.some((s) => abbr.range.containsRange(s.withLength(0)))
+      ) {
+        abbr.status = "finished";
       }
     }
   }
 
   /**
-   * Mark all tracked abbreviations for finalization.
+   * Mark all active abbreviations as finished.
    * Used on dispose, editor switch, input box accept, etc.
    * Call {@link flushDirty} after to apply replacements.
    */
   replaceAllTrackedAbbreviations() {
-    for (const abbr of [...this.trackedAbbreviations]) {
-      if (abbr.isReplaced) {
-        this.removeFromTracking(abbr);
-      } else {
-        this._finishedAbbreviations.add(abbr);
+    for (const abbr of this.trackedAbbreviations) {
+      if (abbr.status === "active") {
+        abbr.status = "finished";
       }
     }
   }
 
   /**
-   * Cycle all replaced abbreviations that have a cursor in them.
+   * Cycle all abbreviations with symbols that have a cursor in them.
    * Called by the Tab / Shift+Tab commands.
    *
-   * For abbreviations still in typing mode that have a complete match,
-   * marks them so {@link flushDirty} will enter cycling mode.
+   * Abbreviations still in typing mode with a complete match are not
+   * stepped; the next flush replaces them at the remembered index.
    *
    * Returns true if any cycling/replacement occurred.
    */
   cycleAbbreviations(direction: CycleDirection): boolean {
     const selections = this.textSource.collectSelections();
 
-    const withCursor = [...this.trackedAbbreviations].filter((abbr) =>
-      selections.some((s) => abbr.range.containsRange(s.withLength(0))),
+    const withCursor = [...this.trackedAbbreviations].filter(
+      (abbr) =>
+        abbr.status === "active" &&
+        selections.some((s) => abbr.range.containsRange(s.withLength(0))),
     );
 
     if (withCursor.length === 0) return false;
 
-    const toCycle = withCursor.filter((a) => a.isReplaced);
-    const toFirstReplace = withCursor.filter(
-      (a) =>
-        !a.isReplaced && this.abbreviationProvider.getSymbolsForAbbreviation(a.text) !== undefined,
-    );
-
-    if (toCycle.length === 0 && toFirstReplace.length === 0) {
+    const cyclable = withCursor.filter((abbr) => abbr.cycleSymbols.length > 0);
+    if (cyclable.length === 0) {
       // Nothing to cycle and nothing complete -- Tab fallback: finalize all.
       this.replaceAllTrackedAbbreviations();
       return true;
     }
 
-    for (const abbr of toCycle) {
-      abbr.cycle(direction);
-      this.dirtyAbbreviations.add(abbr);
-    }
-
-    for (const abbr of toFirstReplace) {
-      this.dirtyAbbreviations.add(abbr);
+    for (const abbr of cyclable) {
+      if (abbr.isReplaced) {
+        abbr.cycle(direction);
+      }
     }
 
     return true;
@@ -200,174 +157,77 @@ export class AbbreviationRewriter {
 
   /**
    * Delete all tracked abbreviations that have a cursor in them.
-   * Called by Ctrl+Backspace. Removes the abbreviation text/symbol from
-   * the document entirely.
+   * Called by Ctrl+Backspace. The next flush removes their spans from the
+   * document entirely.
    */
   deleteAbbreviations(): void {
     const selections = this.textSource.collectSelections();
 
-    const withCursor = [...this.trackedAbbreviations].filter((abbr) =>
-      selections.some((s) => abbr.range.containsRange(s.withLength(0))),
-    );
-
-    for (const abbr of withCursor) {
-      this._deletedAbbreviations.add(abbr);
-      this.removeFromTracking(abbr);
+    for (const abbr of this.trackedAbbreviations) {
+      if (selections.some((s) => abbr.range.containsRange(s.withLength(0)))) {
+        abbr.status = "deleted";
+      }
     }
   }
 
   /**
-   * Compute diffs between current state and document, apply one batch edit.
+   * Reconcile the document with the desired text of every tracked
+   * abbreviation in one batch edit, then drop finished/deleted ones.
+   *
+   * On a failed edit nothing has been mutated in memory, so the same diff
+   * is simply retried on the next flush.
    */
   async flushDirty(): Promise<void> {
-    type FlushItem = {
-      abbr: TrackedAbbreviation;
-      newText: string;
-      rangeAtCreation: Range;
-      apply: (newRange: Range) => void;
-    };
+    const all = [...this.trackedAbbreviations].sort((a, b) => a.start - b.start);
+    const writes = all.filter((abbr) => abbr.desired !== abbr.shown);
 
-    const changes: Change[] = [];
-    const items: FlushItem[] = [];
+    if (writes.length > 0) {
+      const changes: Change[] = writes.map((abbr) => ({
+        range: abbr.range,
+        newText: abbr.desired,
+      }));
 
-    // Deleted abbreviations (Ctrl+Backspace)
-    for (const abbr of this._deletedAbbreviations) {
-      const rangeAtCreation = abbr.range;
-      changes.push({ range: rangeAtCreation, newText: "" });
-      items.push({ abbr, newText: "", rangeAtCreation, apply: () => {} });
-    }
-    this._deletedAbbreviations.clear();
+      // Capture selections before the edit so they can be mapped through it.
+      const selectionsBefore = this.textSource.collectSelections();
 
-    // Finished abbreviations (non-matching char typed in typing mode)
-    const finished = [...this._finishedAbbreviations];
-    this._finishedAbbreviations.clear();
-    const finishedForRollback: TrackedAbbreviation[] = [];
+      const ok = await this.replaceAbbreviations(changes);
+      if (!ok) return;
 
-    for (const abbr of finished) {
-      if (!this.trackedAbbreviations.has(abbr)) continue;
-
-      const symbols = this.abbreviationProvider.getSymbolsForAbbreviation(abbr.text);
-      if (symbols && symbols.length > 0) {
-        const initialIndex = this.abbreviationProvider.getLastSelectedIndex(abbr.text);
-        const newText = symbols[initialIndex];
-        const rangeAtCreation = abbr.range;
-
-        changes.push({ range: rangeAtCreation, newText });
-        items.push({ abbr, newText, rangeAtCreation, apply: () => {} });
-      }
-
-      this.trackedAbbreviations.delete(abbr);
-      finishedForRollback.push(abbr);
-    }
-
-    // Complete typing abbreviations → eager replace
-    const complete = [...this.trackedAbbreviations].filter(
-      (abbr) =>
-        !abbr.isReplaced &&
-        this.abbreviationProvider.getSymbolsForAbbreviation(abbr.text) !== undefined,
-    );
-
-    for (const abbr of complete) {
-      const symbols = this.abbreviationProvider.getSymbolsForAbbreviation(abbr.text)!;
-      const initialIndex = this.abbreviationProvider.getLastSelectedIndex(abbr.text);
-      const newText = symbols[initialIndex];
-      const rangeAtCreation = abbr.range;
-
-      changes.push({ range: rangeAtCreation, newText });
-      items.push({
-        abbr,
-        newText,
-        rangeAtCreation,
-        apply: (newRange) => abbr.enterReplacedState(symbols, newRange, initialIndex),
-      });
-    }
-
-    // Finalized-but-dirty replaced abbreviations.
-    // These were removed from tracking (non-extending char typed) but had
-    // pending extends that should still be applied to the document.
-    for (const abbr of this._finalizedDirty) {
-      if (abbr.cycleSymbols.length > 0) {
-        const newText = abbr.cycleSymbols[abbr.cycleIndex];
-        const rangeAtCreation = abbr.range;
-
-        changes.push({ range: rangeAtCreation, newText });
-        items.push({ abbr, newText, rangeAtCreation, apply: () => {} });
-      }
-    }
-
-    this._finalizedDirty.clear();
-
-    // Dirty replaced abbreviations → update display
-    const dirty = [...this.trackedAbbreviations].filter(
-      (abbr) => abbr.isReplaced && this.dirtyAbbreviations.has(abbr),
-    );
-
-    for (const abbr of dirty) {
-      if (abbr.cycleSymbols.length > 0) {
-        // Has symbols → display the current cycle symbol
-        const newText = abbr.cycleSymbols[abbr.cycleIndex];
-        const rangeAtCreation = abbr.range;
-
-        changes.push({ range: rangeAtCreation, newText });
-        items.push({
-          abbr,
-          newText,
-          rangeAtCreation,
-          apply: (newRange) => {
-            abbr.updateAfterFlush(newRange);
-            this.dirtyAbbreviations.delete(abbr);
-          },
-        });
-      } else {
-        // No symbols → revert to typing mode: display \text
-        const abbrevText = abbr.text;
-        const newText = this.abbreviationCharacter + abbrevText;
-        const rangeAtCreation = abbr.range;
-
-        changes.push({ range: rangeAtCreation, newText });
-        items.push({
-          abbr,
-          newText,
-          rangeAtCreation,
-          apply: (newRange) => {
-            abbr.revertToTyping(new Range(newRange.start + 1, abbrevText.length));
-            this.dirtyAbbreviations.delete(abbr);
-          },
-        });
-      }
-    }
-
-    if (changes.length === 0) return;
-
-    // Capture selections before the edit so they can be mapped through it.
-    const selectionsBefore = this.textSource.collectSelections();
-
-    // Batch apply all changes
-    const ok = await this.replaceAbbreviations(changes);
-    if (ok) {
-      // Apply range shifts: process items left-to-right, accumulating shift
-      let totalShift = 0;
-      const sorted = [...items].sort((a, b) => a.rangeAtCreation.start - b.rangeAtCreation.start);
-      for (const item of sorted) {
-        const newRange = new Range(item.rangeAtCreation.start + totalShift, item.newText.length);
-        item.apply(newRange);
-        totalShift += item.newText.length - item.rangeAtCreation.length;
+      // The document now satisfies every desired text. Commit: update
+      // `shown`, and shift every span (written or not) past earlier writes.
+      const written = new Set(writes);
+      let shift = 0;
+      for (const abbr of all) {
+        abbr.start += shift;
+        if (written.has(abbr)) {
+          const newShown = abbr.desired;
+          shift += newShown.length - abbr.shown.length;
+          abbr.shown = newShown;
+          abbr.kind =
+            abbr.status !== "deleted" && abbr.cycleSymbols.length > 0 ? "symbol" : "typing";
+          abbr.symbolLen = abbr.kind === "symbol" ? abbr.shown.length : 0;
+        }
       }
 
       // Reposition selections. The editor's own cursor mapping leaves the
       // cursor behind when a replacement grows the text (e.g. reverting a
       // symbol to `\text` after an extension makes it incomplete).
-      const sortedChanges = [...changes].sort((a, b) => a.range.start - b.range.start);
       const mappedSelections = selectionsBefore.map((s) => {
-        const start = mapOffsetThroughChanges(s.start, sortedChanges);
-        const end = mapOffsetThroughChanges(s.start + s.length, sortedChanges);
+        const start = mapOffsetThroughChanges(s.start, changes);
+        const end = mapOffsetThroughChanges(s.start + s.length, changes);
         return new Range(start, end - start);
       });
       this.textSource.setSelections(mappedSelections);
-    } else {
-      // Edit failed — re-add finished abbreviations to tracking
-      for (const abbr of finishedForRollback) {
-        this.trackedAbbreviations.add(abbr);
+    }
+
+    // Drop finalized/deleted abbreviations, remembering the cycle index the
+    // user last saw for finalized symbols.
+    for (const abbr of [...this.trackedAbbreviations]) {
+      if (abbr.status !== "active") {
+        if (abbr.kind === "symbol") {
+          this.abbreviationProvider.setLastSelectedIndex(abbr.text, abbr.cycleIndex);
+        }
+        this.trackedAbbreviations.delete(abbr);
       }
     }
   }
@@ -378,19 +238,6 @@ export class AbbreviationRewriter {
 
   resetTrackedAbbreviations() {
     this.trackedAbbreviations.clear();
-    this._finishedAbbreviations.clear();
-    this._finalizedDirty.clear();
-    this.dirtyAbbreviations.clear();
-    this._deletedAbbreviations.clear();
-  }
-
-  private removeFromTracking(abbr: TrackedAbbreviation): void {
-    if (abbr.isReplaced) {
-      this.abbreviationProvider.setLastSelectedIndex(abbr.text, abbr.cycleIndex);
-    }
-    this.trackedAbbreviations.delete(abbr);
-    this._finishedAbbreviations.delete(abbr);
-    this.dirtyAbbreviations.delete(abbr);
   }
 
   async replaceAbbreviations(changes: Change[]): Promise<boolean> {
@@ -402,88 +249,13 @@ export class AbbreviationRewriter {
 
   /**
    * Process a single document change against all tracked abbreviations.
-   * A `\` that doesn't overlap any existing abbreviation starts a new one.
+   * A `\` that doesn't engage any existing abbreviation starts a new one.
    */
   private processChange(c: Change): void {
     let isAnyTrackedAbbrAffected = false;
     for (const abbr of [...this.trackedAbbreviations]) {
-      const result = abbr.processChange(c.range, c.newText);
-      switch (result.kind) {
-        case "none":
-          break;
-        case "stop":
-          this.removeFromTracking(abbr);
-          break;
-        case "updated":
-          isAnyTrackedAbbrAffected = true;
-          // Earlier change in same batch may have marked this finished; override.
-          this._finishedAbbreviations.delete(abbr);
-          if (
-            !abbr.isReplaced &&
-            !this.abbreviationProvider.hasAbbreviationsWithPrefix(abbr.text)
-          ) {
-            // Interior edit made the text unable to ever match an
-            // abbreviation — finalize instead of tracking it forever.
-            this._finishedAbbreviations.add(abbr);
-          }
-          if (abbr.isReplaced) {
-            // Extension chars may have been trimmed by processChange internally;
-            // re-lookup symbols for the current abbreviation.
-            const symbols = this.abbreviationProvider.getSymbolsForAbbreviation(abbr.text) ?? [];
-            const initialIndex =
-              symbols.length > 0 ? this.abbreviationProvider.getLastSelectedIndex(abbr.text) : 0;
-            abbr.setCycleState(symbols, initialIndex);
-            this.dirtyAbbreviations.add(abbr);
-          }
-          break;
-        case "appended":
-          if (abbr.isReplaced) {
-            // Replaced mode: extend or finalize
-            const extended = abbr.text + result.text;
-            if (this.abbreviationProvider.hasAbbreviationsWithPrefix(extended)) {
-              isAnyTrackedAbbrAffected = true;
-              abbr.acceptAppend(result.text);
-              const symbols = this.abbreviationProvider.getSymbolsForAbbreviation(abbr.text) ?? [];
-              const initialIndex =
-                symbols.length > 0 ? this.abbreviationProvider.getLastSelectedIndex(abbr.text) : 0;
-              abbr.setCycleState(symbols, initialIndex);
-              this.dirtyAbbreviations.add(abbr);
-            } else {
-              // Non-extending char after a symbol — done.
-              // If the abbreviation is dirty, preserve it so flushDirty can
-              // still apply the pending extend before finalizing.
-              if (this.dirtyAbbreviations.has(abbr)) {
-                this._finalizedDirty.add(abbr);
-              }
-              this.removeFromTracking(abbr);
-            }
-          } else {
-            // Typing mode: extend or finish
-            if (this.abbreviationProvider.hasAbbreviationsWithPrefix(abbr.text + result.text)) {
-              // Extends a known prefix — keep tracking.
-              isAnyTrackedAbbrAffected = true;
-              abbr.acceptAppend(result.text);
-            } else {
-              // Non-extending char in typing mode — mark for finalization.
-              this._finishedAbbreviations.add(abbr);
-            }
-          }
-          break;
-        case "shorten":
-          isAnyTrackedAbbrAffected = true;
-          {
-            const newText = abbr.text.slice(0, -1);
-            abbr.text = newText;
-            const newSymbols =
-              newText.length > 0
-                ? (this.abbreviationProvider.getSymbolsForAbbreviation(newText) ?? [])
-                : [];
-            const initialIndex =
-              newSymbols.length > 0 ? this.abbreviationProvider.getLastSelectedIndex(newText) : 0;
-            abbr.setCycleState(newSymbols, initialIndex);
-            this.dirtyAbbreviations.add(abbr);
-          }
-          break;
+      if (this.processChangeForAbbr(abbr, c)) {
+        isAnyTrackedAbbrAffected = true;
       }
     }
 
@@ -492,8 +264,130 @@ export class AbbreviationRewriter {
       !isAnyTrackedAbbrAffected &&
       !this.doNotTrackNewAbbr
     ) {
-      const abbr = new TrackedAbbreviation(new Range(c.range.start + 1, 0), "");
-      this.trackedAbbreviations.add(abbr);
+      this.trackedAbbreviations.add(
+        new TrackedAbbreviation(
+          this.abbreviationProvider,
+          this.abbreviationCharacter,
+          c.range.start,
+          this.abbreviationCharacter,
+          "",
+        ),
+      );
     }
+  }
+
+  /**
+   * Process one document change against one abbreviation, updating its
+   * span/`shown`/`text`/status. Returns true if the change materially
+   * engaged the abbreviation (absorbed append, interior edit, shorten) --
+   * used to decide whether a typed leader starts a *new* abbreviation.
+   */
+  private processChangeForAbbr(abbr: TrackedAbbreviation, c: Change): boolean {
+    const spanStart = abbr.start;
+    const spanEnd = abbr.start + abbr.shown.length;
+    const changeEnd = c.range.start + c.range.length;
+
+    // Entirely after the span.
+    if (c.range.start >= spanEnd) {
+      if (
+        c.range.start === spanEnd &&
+        c.range.length === 0 &&
+        c.newText.length > 0 &&
+        abbr.status !== "deleted"
+      ) {
+        // Insertion immediately after the span (typed char or paste):
+        // absorb if it extends a viable abbreviation prefix; otherwise the
+        // abbreviation is done and the insertion stays outside the span.
+        if (this.hasAbbreviationsWithPrefix(abbr.text + c.newText)) {
+          abbr.shown += c.newText;
+          abbr.setText(abbr.text + c.newText);
+          return true;
+        }
+        if (abbr.status === "active") {
+          abbr.status = "finished";
+        }
+      }
+      return false;
+    }
+
+    // Entirely before the span (including an insertion exactly at its start).
+    if (changeEnd <= spanStart) {
+      abbr.start += c.newText.length - c.range.length;
+      return false;
+    }
+
+    // Straddles a span boundary: destructive edit -- drop tracking without
+    // writing anything.
+    if (c.range.start < spanStart || changeEnd > spanEnd) {
+      this.trackedAbbreviations.delete(abbr);
+      return false;
+    }
+
+    // Interior edit: splice `shown`, then keep `text` in sync per kind.
+    const off = c.range.start - spanStart;
+    const spliced = abbr.shown.slice(0, off) + c.newText + abbr.shown.slice(off + c.range.length);
+
+    if (abbr.kind === "typing") {
+      if (!spliced.startsWith(this.abbreviationCharacter)) {
+        // Leader destroyed -- drop tracking.
+        this.trackedAbbreviations.delete(abbr);
+        return false;
+      }
+      abbr.shown = spliced;
+      abbr.setText(spliced.slice(this.abbreviationCharacter.length));
+      this.reviveOrFinalize(abbr);
+      return true;
+    }
+
+    // Symbol kind.
+    if (off >= abbr.symbolLen) {
+      // Edit within the tail: splice `text` in parallel.
+      const baseLen = abbr.text.length - abbr.tail.length;
+      const tailOff = off - abbr.symbolLen;
+      const newTail =
+        abbr.tail.slice(0, tailOff) + c.newText + abbr.tail.slice(tailOff + c.range.length);
+      abbr.shown = spliced;
+      abbr.setText(abbr.text.slice(0, baseLen) + newTail);
+      this.reviveOrFinalize(abbr);
+      return true;
+    }
+
+    if (abbr.tail.length > 0) {
+      // Edit touches the symbol while tail chars exist: destructive.
+      this.trackedAbbreviations.delete(abbr);
+      return false;
+    }
+
+    if (c.newText.length === 0 && changeEnd === spanEnd && abbr.text.length > 0) {
+      // Backspace into the symbol -- deleting any suffix of it (one code
+      // point of a multi-code-point symbol, or the whole thing): strip one
+      // character from the abbreviation. The flush then writes the shorter
+      // abbreviation's symbol (or `\text`) over what's left of the span.
+      abbr.shown = spliced;
+      abbr.symbolLen = spliced.length;
+      abbr.setText(abbr.text.slice(0, -1));
+      return true;
+    }
+
+    // Any other interior edit of the symbol (e.g. typing into its middle):
+    // `desired` is unchanged, so the next flush restores the symbol.
+    abbr.shown = spliced;
+    abbr.symbolLen = spliced.length;
+    return true;
+  }
+
+  /**
+   * After an interior edit re-synced `text`: an earlier change in the same
+   * batch may have marked the abbreviation finished -- reactivate it, unless
+   * the new text can never match an abbreviation (then finalize instead of
+   * tracking it forever). Deleted abbreviations stay deleted.
+   */
+  private reviveOrFinalize(abbr: TrackedAbbreviation): void {
+    if (abbr.status === "deleted") return;
+    abbr.status = this.hasAbbreviationsWithPrefix(abbr.text) ? "active" : "finished";
+  }
+
+  private hasAbbreviationsWithPrefix(prefix: string): boolean {
+    return this.abbreviationProvider.hasAbbreviationsWithPrefix(prefix);
   }
 }

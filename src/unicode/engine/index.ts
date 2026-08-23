@@ -8,4 +8,9 @@ export {
   mapOffsetThroughChanges,
 } from "./AbbreviationRewriter";
 export { Range } from "./Range";
-export { TrackedAbbreviation, ProcessChangeResult, CycleDirection } from "./TrackedAbbreviation";
+export {
+  TrackedAbbreviation,
+  AbbreviationStatus,
+  CycleDirection,
+  DisplayKind,
+} from "./TrackedAbbreviation";

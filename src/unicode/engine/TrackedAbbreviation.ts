@@ -5,281 +5,141 @@
 // (lean4-unicode-input/src/TrackedAbbreviation.ts)
 // Modified for Agda
 
+import { AbbreviationProvider } from "./AbbreviationProvider";
 import { Range } from "./Range";
 
 /** Direction for cycling through abbreviation symbols: forward (+1) or backward (-1). */
 export type CycleDirection = 1 | -1;
 
-/** Result of processing a document change against a tracked abbreviation. */
-export type ProcessChangeResult =
-  /** Change was elsewhere -- no impact (range may have been shifted internally). */
-  | { kind: "none" }
-  /** Abbreviation should be removed from tracking (disruptive edit). */
-  | { kind: "stop" }
-  /** Edit inside the abbreviation range updated its text/range. */
-  | { kind: "updated" }
-  /** Text appended at end of the abbreviation. Caller should check prefix
-   *  validity and call `acceptAppend` if valid. */
-  | { kind: "appended"; text: string }
-  /** Replaced mode: symbol fully deleted (backspace). Caller should shorten
-   *  the abbreviation text and update cycle state. */
-  | { kind: "shorten" };
+/**
+ * Lifecycle status of a tracked abbreviation.
+ *
+ *   - `active`: the user is still working on it (typing, cycling, extending).
+ *   - `finished`: done (non-extending char typed, cursor moved away, or
+ *     replace-all). The next flush reconciles the document and drops it.
+ *   - `deleted`: removed via the delete command. The next flush deletes its
+ *     span from the document and drops it.
+ */
+export type AbbreviationStatus = "active" | "finished" | "deleted";
 
 /**
- * Represents an abbreviation tracked by the rewriter.
+ * How to interpret {@link TrackedAbbreviation.shown} when processing edits.
  *
- * Lifecycle states:
- *   1. **Typing** -- the user is building the abbreviation character by character.
- *      `isReplaced === false`. The range covers `\` + abbreviation text.
- *   2. **Replaced / cycling** -- the abbreviation text has been replaced with a
- *      symbol from the cycle list. `isReplaced === true`. The range covers the
- *      flushed symbol plus any extension chars typed after it.
+ *   - `typing`: `shown` is `\` + text, exactly what the user typed.
+ *   - `symbol`: `shown[0..symbolLen)` is a symbol written by flush; the rest
+ *     (the tail) is characters the user typed after it since the last flush.
+ */
+export type DisplayKind = "typing" | "symbol";
+
+/**
+ * One abbreviation tracked by the rewriter, reconciliation-style.
  *
- * In replaced mode, `_flushedSymbolLength` records the display length of the
- * symbol last written by flush. Extension chars (typed by the user after the
- * symbol) occupy the rest of the range. The rewriter owns dirty tracking.
+ * The abbreviation always knows two strings:
  *
- * This class is a pure position/state tracker with no dependencies on the
- * abbreviation database. The rewriter is responsible for all provider queries.
+ *   - {@link shown}: the exact document content of its span
+ *     `[start, start + shown.length)`. Kept in sync by the rewriter as it
+ *     processes document changes.
+ *   - {@link desired}: what the span *should* show, derived from
+ *     `text`/`status`/`cycleIndex`. Never stored.
+ *
+ * The rewriter's flush writes `desired` wherever it differs from `shown`.
+ * There are no dirty flags; "needs a write" is always `desired !== shown`.
+ *
+ * The cycle list is derived from the provider on demand; only the index is
+ * stored. {@link setText} re-derives the index from the remembered
+ * last-selected one, so every text change keeps it consistent.
  */
 export class TrackedAbbreviation {
-  /**
-   * In typing mode: range of the abbreviation text (excluding the leader `\`).
-   * In replaced mode: range of the flushed symbol plus any extension chars.
-   */
-  private _abbreviationRange: Range;
+  status: AbbreviationStatus = "active";
+  kind: DisplayKind = "typing";
 
-  /** The abbreviation text (excluding leader). Includes extensions in replaced mode. */
+  /**
+   * `kind === "symbol"` only: length of the prefix of {@link shown} written
+   * by the last flush. The rest of `shown` is the tail.
+   */
+  symbolLen = 0;
+
+  /** Index into {@link cycleSymbols}. Maintained by {@link setText}/{@link cycle}. */
+  cycleIndex = 0;
+
   private _text: string;
 
-  // --- Cycling state ---
-
-  /** Whether the document currently shows a symbol (true) or `\text` (false). */
-  private _isReplaced = false;
-
-  /** The cycle list for the current abbreviation text. */
-  private _cycleSymbols: string[] = [];
-
-  /** Current index into _cycleSymbols. */
-  private _cycleIndex = 0;
-
-  /**
-   * Replaced mode only: display length of the symbol last written by flush.
-   * Extension chars start at `_abbreviationRange.start + _flushedSymbolLength`.
-   */
-  private _flushedSymbolLength = 0;
-
-  // --- Public getters ---
-
-  get abbreviationRange(): Range {
-    return this._abbreviationRange;
+  constructor(
+    private readonly provider: AbbreviationProvider,
+    private readonly leader: string,
+    /** Document offset where the span starts. */
+    public start: number,
+    /** Document content of the span. */
+    public shown: string,
+    text: string,
+  ) {
+    this._text = text;
   }
 
-  /**
-   * Full range in the document.
-   * Typing mode: includes the leader character.
-   * Replaced mode: includes flushed symbol + extension chars.
-   */
-  get range(): Range {
-    if (this._isReplaced) {
-      return this._abbreviationRange;
-    }
-    return this._abbreviationRange.moveStart(-1);
-  }
-
+  /** The abbreviation text being built (excluding the leader). */
   get text(): string {
     return this._text;
   }
 
-  set text(value: string) {
+  /**
+   * Update the abbreviation text, re-deriving the cycle index from the
+   * provider's remembered last selection (clamped in case the table shrank).
+   */
+  setText(value: string): void {
     this._text = value;
+    const symbols = this.cycleSymbols;
+    this.cycleIndex =
+      symbols.length > 0
+        ? Math.min(this.provider.getLastSelectedIndex(value), symbols.length - 1)
+        : 0;
   }
 
+  /** Span of {@link shown} in the document (leader included in typing mode). */
+  get range(): Range {
+    return new Range(this.start, this.shown.length);
+  }
+
+  /** Whether the document currently shows a flushed symbol (vs `\text`). */
   get isReplaced(): boolean {
-    return this._isReplaced;
+    return this.kind === "symbol";
   }
 
+  /** The cycle list for the current text (derived, never stored). */
   get cycleSymbols(): string[] {
-    return this._cycleSymbols;
-  }
-
-  get cycleIndex(): number {
-    return this._cycleIndex;
+    return this.provider.getSymbolsForAbbreviation(this._text) ?? [];
   }
 
   get isCycleable(): boolean {
-    return this._cycleSymbols.length > 1;
+    return this.cycleSymbols.length > 1;
   }
 
-  /** The symbol currently shown (or that would be shown) for this abbreviation. */
-  get currentSymbol(): string | undefined {
-    if (this._cycleSymbols.length === 0) return undefined;
-    return this._cycleSymbols[this._cycleIndex];
-  }
-
-  get flushedSymbolLength(): number {
-    return this._flushedSymbolLength;
-  }
-
-  constructor(abbreviationRange: Range, text: string) {
-    this._abbreviationRange = abbreviationRange;
-    this._text = text;
-  }
-
-  // --- State update methods ---
-
-  /**
-   * Enter replaced/cycling mode. Called by the rewriter after it replaces
-   * `\text` with a symbol in the document.
-   *
-   * @param symbols The cycle list for the current abbreviation.
-   * @param symbolRange The range of the replaced symbol in the document.
-   * @param initialIndex Starting index into the cycle list (from remembered
-   *   last selection). Defaults to 0.
-   */
-  enterReplacedState(symbols: string[], symbolRange: Range, initialIndex = 0): void {
-    this._cycleSymbols = symbols;
-    this._cycleIndex = initialIndex;
-    this._isReplaced = true;
-    this._abbreviationRange = symbolRange;
-    this._flushedSymbolLength = symbolRange.length;
+  /** Characters typed after the flushed symbol since the last flush. */
+  get tail(): string {
+    return this.shown.slice(this.symbolLen);
   }
 
   /**
-   * Advance the cycle index. Returns the new symbol.
+   * What the span should show:
+   * deleted → nothing; complete abbreviation → the current cycle symbol;
+   * otherwise (empty, prefix-only, or impossible text) → `\text`.
    */
-  cycle(direction: CycleDirection): string {
-    if (this._cycleSymbols.length === 0) {
-      throw new Error("Cannot cycle: no symbols");
+  get desired(): string {
+    if (this.status === "deleted") {
+      return "";
     }
-    const n = this._cycleSymbols.length;
-    this._cycleIndex = (this._cycleIndex + direction + n) % n;
-    return this._cycleSymbols[this._cycleIndex];
-  }
-
-  /**
-   * Set the cycle list and index directly.
-   * Used by the rewriter after extend, shorten, or updated events.
-   */
-  setCycleState(symbols: string[], index: number): void {
-    this._cycleSymbols = symbols;
-    this._cycleIndex = index;
-  }
-
-  /**
-   * Update range and flushedSymbolLength after a successful flush
-   * that wrote a new symbol to the document.
-   */
-  updateAfterFlush(symbolRange: Range): void {
-    this._abbreviationRange = symbolRange;
-    this._flushedSymbolLength = symbolRange.length;
-  }
-
-  /**
-   * Revert from replaced mode to typing mode after a flush
-   * (e.g. the shortened abbreviation has no symbols, so we display `\text`).
-   */
-  revertToTyping(textRange: Range): void {
-    this._isReplaced = false;
-    this._cycleSymbols = [];
-    this._cycleIndex = 0;
-    this._flushedSymbolLength = 0;
-    this._abbreviationRange = textRange;
-  }
-
-  /**
-   * Accept text appended at the end of the abbreviation.
-   * Grows both the range and text. Works for both typing and replaced mode.
-   */
-  acceptAppend(text: string): void {
-    this._abbreviationRange = this._abbreviationRange.moveEnd(text.length);
-    this._text = this._text + text;
-  }
-
-  // --- Change processing ---
-
-  processChange(range: Range, newText: string): ProcessChangeResult {
-    if (this._isReplaced) {
-      return this._processChangeReplaced(range, newText);
-    } else {
-      return this._processChangeTyping(range, newText);
+    const symbols = this.cycleSymbols;
+    if (symbols.length > 0) {
+      return symbols[this.cycleIndex];
     }
+    return this.leader + this._text;
   }
 
-  /** Process a document change while in typing mode. */
-  private _processChangeTyping(range: Range, newText: string): ProcessChangeResult {
-    if (this.abbreviationRange.containsRange(range)) {
-      if (range.length === 0 && range.start === this.abbreviationRange.endInclusive + 1) {
-        // Zero-length insertion at end -- caller checks prefix validity.
-        return { kind: "appended", text: newText };
-      }
-
-      this._abbreviationRange = this.abbreviationRange.moveEnd(newText.length - range.length);
-      const startStr = this.text.slice(0, range.start - this.abbreviationRange.start);
-      const endStr = this.text.slice(range.endInclusive + 1 - this.abbreviationRange.start);
-      this._text = startStr + newText + endStr;
-
-      return { kind: "updated" };
-    } else if (range.isBefore(this.range)) {
-      this._abbreviationRange = this._abbreviationRange.move(newText.length - range.length);
-      return { kind: "none" };
-    } else if (range.isAfter(this.range)) {
-      return { kind: "none" };
-    } else {
-      return { kind: "stop" };
+  /** Step the cycle index. No-op if the current text has no symbols. */
+  cycle(direction: CycleDirection): void {
+    const n = this.cycleSymbols.length;
+    if (n === 0) {
+      return;
     }
-  }
-
-  /** Process a document change while in replaced mode. */
-  private _processChangeReplaced(range: Range, newText: string): ProcessChangeResult {
-    // After range: check adjacency for append
-    if (range.isAfter(this._abbreviationRange)) {
-      if (range.start === this._abbreviationRange.endInclusive + 1 && newText.length === 1) {
-        return { kind: "appended", text: newText };
-      }
-      // Not immediately adjacent (e.g. multi-cursor edit elsewhere).
-      return { kind: "none" };
-    }
-
-    // Before range: shift
-    if (range.isBefore(this._abbreviationRange)) {
-      this._abbreviationRange = this._abbreviationRange.move(newText.length - range.length);
-      return { kind: "none" };
-    }
-
-    // Contained in range
-    if (this._abbreviationRange.containsRange(range)) {
-      const extensionLen = this._abbreviationRange.length - this._flushedSymbolLength;
-      const symbolEnd = this._abbreviationRange.start + this._flushedSymbolLength;
-
-      if (extensionLen > 0 && range.start >= symbolEnd) {
-        // Edit in extension region: splice text and adjust range
-        const baseTextLen = this._text.length - extensionLen;
-        const extOffset = range.start - symbolEnd;
-        const extText = this._text.slice(baseTextLen);
-
-        const newExt =
-          extText.slice(0, extOffset) + newText + extText.slice(extOffset + range.length);
-
-        this._text = this._text.slice(0, baseTextLen) + newExt;
-        this._abbreviationRange = this._abbreviationRange.moveEnd(newText.length - range.length);
-        return { kind: "updated" };
-      } else if (extensionLen > 0) {
-        // Edit touches symbol while extensions exist: stop
-        return { kind: "stop" };
-      } else {
-        // No extensions
-        this._abbreviationRange = this._abbreviationRange.moveEnd(newText.length - range.length);
-
-        if (this._abbreviationRange.length === 0 && newText.length === 0 && this._text.length > 0) {
-          return { kind: "shorten" };
-        }
-
-        return { kind: "updated" };
-      }
-    }
-
-    // Overlaps boundary: stop
-    return { kind: "stop" };
+    this.cycleIndex = (this.cycleIndex + direction + n) % n;
   }
 }

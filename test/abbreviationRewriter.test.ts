@@ -1789,6 +1789,178 @@ describe("Selection repositioning after flush", () => {
   });
 });
 
+describe("Multi-code-point symbol backspace", () => {
+  it("backspace deleting one code unit of a two-char symbol shortens", async () => {
+    // The symbol for "zqb" is "T1" (two code points). A real backspace only
+    // deletes the trailing "1"; the engine must treat that as backspacing
+    // the symbol (shorten), not fight the user by restoring "T1".
+    const provider = new AbbreviationProvider({ zq: ["X"], zqb: ["T1"] });
+    const source = new MockTextSource("\\zqb");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "z" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "q" }]);
+    rewriter.changeInput([{ range: new Range(3, 0), newText: "b" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("T1");
+
+    // Backspace deletes only the last code point of the symbol.
+    source.text = "T";
+    rewriter.changeInput([{ range: new Range(1, 1), newText: "" }]);
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("X");
+    const tracked = [...rewriter.getTrackedAbbreviations()];
+    expect(tracked.length).toBe(1);
+    expect(tracked[0].text).toBe("zq");
+    expect(tracked[0].isReplaced).toBe(true);
+  });
+
+  it("backspace deleting a combining mark shortens", async () => {
+    // "x̶" is one grapheme but two code points; backspace deletes just
+    // the combining long stroke.
+    const provider = new AbbreviationProvider({ zc: ["Y"], zcd: ["x̶"] });
+    const source = new MockTextSource("\\zcd");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "z" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "c" }]);
+    rewriter.changeInput([{ range: new Range(3, 0), newText: "d" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("x̶");
+
+    source.text = "x";
+    rewriter.changeInput([{ range: new Range(1, 1), newText: "" }]);
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("Y");
+    const tracked = [...rewriter.getTrackedAbbreviations()];
+    expect(tracked.length).toBe(1);
+    expect(tracked[0].text).toBe("zc");
+  });
+});
+
+describe("Paste after a replaced symbol", () => {
+  it("multi-char paste extends to a complete abbreviation", async () => {
+    // Typing-mode already absorbed viable pastes; replaced mode only
+    // accepted single characters. Both now behave the same.
+    const provider = new AbbreviationProvider({ t: ["T1"], to: ["→"], top: ["⊤"] });
+    const source = new MockTextSource("\\t");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("T1");
+
+    // Paste "op" right after the symbol.
+    source.text = "T1op";
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "op" }]);
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("⊤");
+    const tracked = [...rewriter.getTrackedAbbreviations()];
+    expect(tracked.length).toBe(1);
+    expect(tracked[0].text).toBe("top");
+    expect(tracked[0].isReplaced).toBe(true);
+  });
+
+  it("multi-char paste extending to an incomplete prefix reverts to typing mode", async () => {
+    const provider = new AbbreviationProvider({ a: ["A"], abcd: ["Z"] });
+    const source = new MockTextSource("\\a");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "a" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("A");
+
+    source.text = "Abc";
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "bc" }]);
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("\\abc");
+    const tracked = [...rewriter.getTrackedAbbreviations()];
+    expect(tracked.length).toBe(1);
+    expect(tracked[0].text).toBe("abc");
+    expect(tracked[0].isReplaced).toBe(false);
+  });
+
+  it("non-viable paste finalizes and stays outside the abbreviation", async () => {
+    const provider = new AbbreviationProvider({ t: ["T1"], to: ["→"] });
+    const source = new MockTextSource("\\t");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("T1");
+
+    source.text = "T1%%";
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "%%" }]);
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("T1%%");
+    expect(rewriter.getTrackedAbbreviations().size).toBe(0);
+  });
+});
+
+describe("Reconciliation regressions", () => {
+  it("cursor leaving an abbreviation with a pending extend still applies it", async () => {
+    // Previously, a cursor jump between the extend keystroke and the flush
+    // removed the abbreviation from tracking immediately, losing the pending
+    // write and leaving "→p" in the document.
+    const provider = new AbbreviationProvider({ to: ["→"], top: ["⊤"] });
+    const source = new MockTextSource("\\to");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "o" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("→");
+
+    // Extend with "p", then the cursor jumps far away before the flush.
+    source.text = "→p";
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "p" }]);
+    rewriter.changeSelections([new Range(10, 0)]);
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("⊤");
+    expect(rewriter.getTrackedAbbreviations().size).toBe(0);
+  });
+
+  it("an unwritten abbreviation's span shifts when an earlier one's replacement changes length", async () => {
+    // abbr1 (\to, complete) is replaced while abbr2 (\ab, incomplete prefix)
+    // is not written at all. abbr2's span must still shift left so later
+    // keystrokes land adjacent to it.
+    const provider = new AbbreviationProvider({ to: ["→"], abc: ["Y"] });
+    const source = new MockTextSource("\\to \\ab");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "o" }]);
+    rewriter.changeInput([{ range: new Range(4, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(5, 0), newText: "a" }]);
+    rewriter.changeInput([{ range: new Range(6, 0), newText: "b" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("→ \\ab");
+
+    // Type "c" at the post-replacement position (end of the shifted \ab).
+    source.text = "→ \\abc";
+    rewriter.changeInput([{ range: new Range(5, 0), newText: "c" }]);
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("→ Y");
+    const tracked = [...rewriter.getTrackedAbbreviations()];
+    expect(tracked.length).toBe(2);
+    expect(tracked.some((t) => t.text === "abc" && t.isReplaced)).toBe(true);
+  });
+});
+
 describe("Interior edits in typing mode", () => {
   it("finalizes when an interior edit makes the text an impossible prefix", async () => {
     const provider = new AbbreviationProvider({ times: ["×"] });
