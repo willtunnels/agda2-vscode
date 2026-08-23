@@ -1,5 +1,18 @@
 # Change Log
 
+## [v1.2.3](https://github.com/willtunnels/agda2-vscode/tree/v1.2.3) (2026-08-23)
+
+- Fix Unicode input for abbreviations reached through a shorter complete abbreviation (e.g. `\times` through `\t`)
+- Fix cursor position in input boxes when a batched extend + finalize replacement shortened text before the cursor
+- Stop tracking an abbreviation when an edit inside it makes it unable to ever match (previously it stayed underlined forever)
+- Fix backspace on symbols made of several code points (e.g. with combining marks)
+- Pasting multiple characters right after a replaced symbol now extends the abbreviation, matching typed characters
+- Fix a pending extension being lost (leaving e.g. `→p` in the document) when the cursor jumped away before the replacement was applied
+- Fix stale abbreviation positions in multi-cursor sessions when one abbreviation was replaced while another was still being typed
+- Fix fast typing occasionally garbling abbreviations (e.g. `\times` -> `⁀ms` or left as literal text)
+- Fix cursor position after backspacing a symbol
+- Fix abbreviations dying in the real editor on the revert step (e.g. `\times`: typing `i` after `\t` -> `◂` untracked the abbreviation and left `\ti` as literal text)
+
 ## [v1.2.2](https://github.com/willtunnels/agda2-vscode/tree/v1.2.2) (2026-04-22)
 
 - Fix stylesheet for info panel so that text is monospace

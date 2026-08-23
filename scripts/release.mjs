@@ -5,15 +5,21 @@
 //   - Open VSX                 (ovsx; needs OVSX_PAT)
 //   - GitHub                   (tag + release with the .vsix attached; needs gh)
 //
-// One-time setup:
-//   1. Create a .env file at the repo root (gitignored) with two lines:
+// One-time setup (put values in a gitignored .env file at the repo root;
+// real environment variables with the same names take precedence):
+//   1. Marketplace auth, ONE of:
 //        VSCE_PAT=...   Azure DevOps personal access token with the
-//                       "Marketplace > Manage" scope, for the publisher "bdrisc":
-//                       https://code.visualstudio.com/api/working-with-extensions/publishing-extension#get-a-personal-access-token
-//        OVSX_PAT=...   open-vsx.org access token for the "bdrisc" namespace:
+//                       "Marketplace > Manage" scope, for the publisher "bdrisc".
+//                       NOTE: global ("all accessible organizations") PATs stop
+//                       working on 2026-12-01; whether org-scoped PATs will be
+//                       accepted is tracked in microsoft/vscode#322741.
+//        VSCE_AUTH=azure-credential
+//                       Publish with Microsoft Entra ID instead of a PAT:
+//                       sign in with `az login` as the Microsoft account that
+//                       has access to the "bdrisc" publisher.
+//   2. OVSX_PAT=...    open-vsx.org access token for the "bdrisc" namespace:
 //                       https://open-vsx.org/user-settings/tokens
-//      (Real environment variables with the same names take precedence.)
-//   2. Log in to the GitHub CLI (gh auth login).
+//   3. Log in to the GitHub CLI (gh auth login).
 //
 // Per release:
 //   1. Bump "version" in package.json and add a matching "## [vX.Y.Z](...)"
@@ -110,6 +116,11 @@ if (existsSync(".env")) {
   }
 }
 
+const vsceAuth = process.env.VSCE_AUTH ?? "pat";
+if (vsceAuth !== "pat" && vsceAuth !== "azure-credential") {
+  die(`VSCE_AUTH must be "pat" or "azure-credential" (got "${vsceAuth}")`);
+}
+
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const { name, publisher, version } = pkg;
 const repoUrl = pkg.repository.url.replace(/\.git$/, "");
@@ -198,8 +209,16 @@ if (!needMp && !needOvsx && !needTag && !needRelease) {
   process.exit(0);
 }
 
-if (needMp && !process.env.VSCE_PAT) {
-  softDie("VSCE_PAT is not set; add it to .env or the environment (see the header of this script)");
+if (needMp) {
+  if (vsceAuth === "azure-credential") {
+    if (!succeeds("az", ["account", "show"])) {
+      softDie("VSCE_AUTH=azure-credential requires a logged-in Azure CLI (run: az login)");
+    }
+  } else if (!process.env.VSCE_PAT) {
+    softDie(
+      "VSCE_PAT is not set; add it to .env or the environment, or use VSCE_AUTH=azure-credential (see the header of this script)",
+    );
+  }
 }
 if (needOvsx && !process.env.OVSX_PAT) {
   softDie("OVSX_PAT is not set; add it to .env or the environment (see the header of this script)");
@@ -225,7 +244,9 @@ if (dryRun) {
 
 if (needMp) {
   info("Publishing to the VS Code Marketplace...");
-  run("npx", ["vsce", "publish", "--packagePath", vsix]);
+  const publishArgs = ["vsce", "publish", "--packagePath", vsix];
+  if (vsceAuth === "azure-credential") publishArgs.push("--azure-credential");
+  run("npx", publishArgs);
   info(
     "Published (new versions can take a few minutes to appear while the Marketplace verifies them).",
   );
