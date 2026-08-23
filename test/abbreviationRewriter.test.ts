@@ -3,6 +3,7 @@ import {
   AbbreviationRewriter,
   AbbreviationTextSource,
   Change,
+  mapOffsetThroughChanges,
 } from "../src/unicode/engine/AbbreviationRewriter";
 import { AbbreviationProvider } from "../src/unicode/engine/AbbreviationProvider";
 import { Range } from "../src/unicode/engine/Range";
@@ -14,6 +15,7 @@ class MockTextSource implements AbbreviationTextSource {
   text: string;
   selections: Range[] = [];
   replaceCalls: Change[][] = [];
+  setSelectionsCalls: Range[][] = [];
 
   constructor(initialText: string) {
     this.text = initialText;
@@ -33,6 +35,11 @@ class MockTextSource implements AbbreviationTextSource {
 
   collectSelections(): Range[] {
     return this.selections;
+  }
+
+  setSelections(selections: Range[]): void {
+    this.setSelectionsCalls.push(selections);
+    this.selections = selections;
   }
 }
 
@@ -1649,5 +1656,178 @@ describe("deleteAbbreviations", () => {
     // Nothing changed
     expect(source.text).toBe("x→");
     expect(rewriter.getTrackedAbbreviations().size).toBe(1);
+  });
+});
+
+describe("mapOffsetThroughChanges", () => {
+  const changes: Change[] = [{ range: new Range(2, 3), newText: "xxxxx" }]; // delta +2
+
+  it("offset before the change is unchanged", () => {
+    expect(mapOffsetThroughChanges(0, changes)).toBe(0);
+    expect(mapOffsetThroughChanges(2, changes)).toBe(2); // at range start: stays
+  });
+
+  it("offset inside or at end of the replaced range maps to end of new text", () => {
+    expect(mapOffsetThroughChanges(3, changes)).toBe(7);
+    expect(mapOffsetThroughChanges(5, changes)).toBe(7); // at old end
+  });
+
+  it("offset after the change shifts by the delta", () => {
+    expect(mapOffsetThroughChanges(6, changes)).toBe(8);
+    expect(mapOffsetThroughChanges(10, changes)).toBe(12);
+  });
+
+  it("accumulates deltas across multiple changes", () => {
+    const multi: Change[] = [
+      { range: new Range(0, 3), newText: "A" }, // delta -2
+      { range: new Range(5, 1), newText: "BBB" }, // delta +2
+    ];
+    expect(mapOffsetThroughChanges(3, multi)).toBe(1); // end of first replacement
+    expect(mapOffsetThroughChanges(4, multi)).toBe(2); // between changes: shift -2
+    expect(mapOffsetThroughChanges(6, multi)).toBe(6); // end of second replacement (5-2+3)
+    expect(mapOffsetThroughChanges(8, multi)).toBe(8); // after both: -2 +2
+  });
+});
+
+describe("Selection repositioning after flush", () => {
+  it("\\times: cursor is moved past the reverted abbreviation (regression: \\tmesi)", async () => {
+    // Real table: "t" is a complete abbreviation (◂), "ti" is a prefix of
+    // tie/times but not complete. Typing \times therefore goes
+    //   \t → ◂ → (i) → revert to \ti → \tim → \time → \times → ×.
+    // The revert replaces ◂i (2 chars) with \ti (3 chars). VS Code's own
+    // cursor mapping leaves the cursor at offset 2 -- between t and i --
+    // and further typing produces \tmesi. The engine must reposition the
+    // cursor to offset 3 via setSelections.
+    const provider = new AbbreviationProvider({});
+    const source = new MockTextSource("\\t");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    source.selections = [new Range(1, 0)];
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    source.selections = [new Range(2, 0)];
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("◂");
+    // Pre-edit cursor 2 mapped through (0,2)→"◂"
+    expect(source.selections).toEqual([new Range(1, 0)]);
+
+    // Type "i" after the symbol → "ti" is an incomplete prefix → revert
+    source.text = "◂i";
+    source.selections = [new Range(2, 0)];
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "i" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("\\ti");
+    // THE FIX: cursor must be after the full "\ti" (offset 3), not at 2.
+    expect(source.selections).toEqual([new Range(3, 0)]);
+
+    // Continue typing at the (correctly placed) cursor
+    source.text = "\\tim";
+    source.selections = [new Range(4, 0)];
+    rewriter.changeInput([{ range: new Range(3, 0), newText: "m" }]);
+    source.text = "\\time";
+    source.selections = [new Range(5, 0)];
+    rewriter.changeInput([{ range: new Range(4, 0), newText: "e" }]);
+    source.text = "\\times";
+    source.selections = [new Range(6, 0)];
+    rewriter.changeInput([{ range: new Range(5, 0), newText: "s" }]);
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("×");
+    expect(source.selections).toEqual([new Range(1, 0)]);
+    const tracked = [...rewriter.getTrackedAbbreviations()];
+    expect(tracked.length).toBe(1);
+    expect(tracked[0].text).toBe("times");
+    expect(tracked[0].isReplaced).toBe(true);
+  });
+
+  it("batched extend + finalize keeps cursor after the trailing character", async () => {
+    // Fast typing: "p" (extend) and " " (finalize) arrive in one batch.
+    // The flush replaces "→p" with "⊤" while the document is "→p " and the
+    // cursor is after the space (offset 3). The cursor must map to 2
+    // (after "⊤ "), not jump to 1 (between "⊤" and the space).
+    const provider = new AbbreviationProvider({
+      t: ["T1"],
+      to: ["→"],
+      top: ["⊤"],
+    });
+    const source = new MockTextSource("\\to");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    source.selections = [new Range(3, 0)];
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "o" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("→");
+
+    source.text = "→p";
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "p" }]);
+    source.text = "→p ";
+    rewriter.changeInput([{ range: new Range(2, 0), newText: " " }]);
+    source.selections = [new Range(3, 0)];
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("⊤ ");
+    expect(source.selections).toEqual([new Range(2, 0)]);
+    expect(rewriter.getTrackedAbbreviations().size).toBe(0);
+  });
+
+  it("does not reposition selections when the edit fails", async () => {
+    const provider = new AbbreviationProvider({ to: ["→"] });
+    const source = new MockTextSource("\\to");
+    source.replaceAbbreviations = async () => false;
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    source.selections = [new Range(3, 0)];
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "o" }]);
+    await rewriter.flushDirty();
+
+    expect(source.setSelectionsCalls.length).toBe(0);
+    expect(source.selections).toEqual([new Range(3, 0)]);
+  });
+});
+
+describe("Interior edits in typing mode", () => {
+  it("finalizes when an interior edit makes the text an impossible prefix", async () => {
+    const provider = new AbbreviationProvider({ times: ["×"] });
+    const source = new MockTextSource("\\ti");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "i" }]);
+    expect(rewriter.getTrackedAbbreviations().size).toBe(1);
+
+    // Type "m" INSIDE the abbreviation (between t and i) — "tmi" can never
+    // become an abbreviation, so tracking should end.
+    source.text = "\\tmi";
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "m" }]);
+    await rewriter.flushDirty();
+
+    expect(rewriter.getTrackedAbbreviations().size).toBe(0);
+    expect(source.text).toBe("\\tmi");
+  });
+
+  it("keeps tracking when an interior edit still forms a valid prefix", async () => {
+    const provider = new AbbreviationProvider({ times: ["×"], tie: ["⁀"] });
+    const source = new MockTextSource("\\tie");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "i" }]);
+    rewriter.changeInput([{ range: new Range(3, 0), newText: "e" }]);
+
+    // Insert "m" between i and e → "time" is still a prefix of "times"
+    source.text = "\\time";
+    rewriter.changeInput([{ range: new Range(3, 0), newText: "m" }]);
+    await rewriter.flushDirty();
+
+    const tracked = [...rewriter.getTrackedAbbreviations()];
+    expect(tracked.length).toBe(1);
+    expect(tracked[0].text).toBe("time");
+    expect(tracked[0].isReplaced).toBe(false);
   });
 });

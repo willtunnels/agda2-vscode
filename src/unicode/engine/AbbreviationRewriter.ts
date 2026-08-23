@@ -18,6 +18,42 @@ export interface Change {
 export interface AbbreviationTextSource {
   replaceAbbreviations(changes: Change[]): Promise<boolean>;
   collectSelections(): Range[];
+  /**
+   * Reposition selections after a successful {@link replaceAbbreviations}.
+   * `selections` are the pre-edit selections mapped through the applied
+   * changes (see {@link mapOffsetThroughChanges}). Implementations decide
+   * whether to apply them (e.g. skip when they match the editor's own
+   * cursor mapping, or when user edits raced with the replacement).
+   */
+  setSelections(selections: Range[]): void;
+}
+
+/**
+ * Map a document offset through a batch of disjoint, ascending-sorted
+ * replacements.
+ *
+ * Offsets at or before the start of a replaced range are unchanged (modulo
+ * earlier shifts); offsets strictly inside or at the end of a replaced range
+ * map to the end of the replacement text; offsets after it shift by the
+ * length delta.
+ *
+ * This encodes the cursor behavior users expect from abbreviation
+ * replacement: a cursor sitting at the end of `\ti` must end up after the
+ * full replacement text. VS Code's `workspace.applyEdit` does not do this
+ * when the replacement is longer than the replaced range (the cursor is
+ * left behind, mid-text), so the text source must reposition explicitly.
+ */
+export function mapOffsetThroughChanges(offset: number, sortedChanges: Change[]): number {
+  let shift = 0;
+  for (const c of sortedChanges) {
+    const start = c.range.start;
+    if (offset <= start) break;
+    if (offset <= start + c.range.length) {
+      return start + shift + c.newText.length;
+    }
+    shift += c.newText.length - c.range.length;
+  }
+  return offset + shift;
 }
 
 /**
@@ -141,8 +177,7 @@ export class AbbreviationRewriter {
     const toCycle = withCursor.filter((a) => a.isReplaced);
     const toFirstReplace = withCursor.filter(
       (a) =>
-        !a.isReplaced &&
-        this.abbreviationProvider.getSymbolsForAbbreviation(a.text) !== undefined,
+        !a.isReplaced && this.abbreviationProvider.getSymbolsForAbbreviation(a.text) !== undefined,
     );
 
     if (toCycle.length === 0 && toFirstReplace.length === 0) {
@@ -304,6 +339,9 @@ export class AbbreviationRewriter {
 
     if (changes.length === 0) return;
 
+    // Capture selections before the edit so they can be mapped through it.
+    const selectionsBefore = this.textSource.collectSelections();
+
     // Batch apply all changes
     const ok = await this.replaceAbbreviations(changes);
     if (ok) {
@@ -311,13 +349,21 @@ export class AbbreviationRewriter {
       let totalShift = 0;
       const sorted = [...items].sort((a, b) => a.rangeAtCreation.start - b.rangeAtCreation.start);
       for (const item of sorted) {
-        const newRange = new Range(
-          item.rangeAtCreation.start + totalShift,
-          item.newText.length,
-        );
+        const newRange = new Range(item.rangeAtCreation.start + totalShift, item.newText.length);
         item.apply(newRange);
         totalShift += item.newText.length - item.rangeAtCreation.length;
       }
+
+      // Reposition selections. The editor's own cursor mapping leaves the
+      // cursor behind when a replacement grows the text (e.g. reverting a
+      // symbol to `\text` after an extension makes it incomplete).
+      const sortedChanges = [...changes].sort((a, b) => a.range.start - b.range.start);
+      const mappedSelections = selectionsBefore.map((s) => {
+        const start = mapOffsetThroughChanges(s.start, sortedChanges);
+        const end = mapOffsetThroughChanges(s.start + s.length, sortedChanges);
+        return new Range(start, end - start);
+      });
+      this.textSource.setSelections(mappedSelections);
     } else {
       // Edit failed — re-add finished abbreviations to tracking
       for (const abbr of finishedForRollback) {
@@ -372,15 +418,20 @@ export class AbbreviationRewriter {
           isAnyTrackedAbbrAffected = true;
           // Earlier change in same batch may have marked this finished; override.
           this._finishedAbbreviations.delete(abbr);
+          if (
+            !abbr.isReplaced &&
+            !this.abbreviationProvider.hasAbbreviationsWithPrefix(abbr.text)
+          ) {
+            // Interior edit made the text unable to ever match an
+            // abbreviation — finalize instead of tracking it forever.
+            this._finishedAbbreviations.add(abbr);
+          }
           if (abbr.isReplaced) {
             // Extension chars may have been trimmed by processChange internally;
             // re-lookup symbols for the current abbreviation.
-            const symbols =
-              this.abbreviationProvider.getSymbolsForAbbreviation(abbr.text) ?? [];
+            const symbols = this.abbreviationProvider.getSymbolsForAbbreviation(abbr.text) ?? [];
             const initialIndex =
-              symbols.length > 0
-                ? this.abbreviationProvider.getLastSelectedIndex(abbr.text)
-                : 0;
+              symbols.length > 0 ? this.abbreviationProvider.getLastSelectedIndex(abbr.text) : 0;
             abbr.setCycleState(symbols, initialIndex);
             this.dirtyAbbreviations.add(abbr);
           }
@@ -392,12 +443,9 @@ export class AbbreviationRewriter {
             if (this.abbreviationProvider.hasAbbreviationsWithPrefix(extended)) {
               isAnyTrackedAbbrAffected = true;
               abbr.acceptAppend(result.text);
-              const symbols =
-                this.abbreviationProvider.getSymbolsForAbbreviation(abbr.text) ?? [];
+              const symbols = this.abbreviationProvider.getSymbolsForAbbreviation(abbr.text) ?? [];
               const initialIndex =
-                symbols.length > 0
-                  ? this.abbreviationProvider.getLastSelectedIndex(abbr.text)
-                  : 0;
+                symbols.length > 0 ? this.abbreviationProvider.getLastSelectedIndex(abbr.text) : 0;
               abbr.setCycleState(symbols, initialIndex);
               this.dirtyAbbreviations.add(abbr);
             } else {
@@ -411,9 +459,7 @@ export class AbbreviationRewriter {
             }
           } else {
             // Typing mode: extend or finish
-            if (
-              this.abbreviationProvider.hasAbbreviationsWithPrefix(abbr.text + result.text)
-            ) {
+            if (this.abbreviationProvider.hasAbbreviationsWithPrefix(abbr.text + result.text)) {
               // Extends a known prefix — keep tracking.
               isAnyTrackedAbbrAffected = true;
               abbr.acceptAppend(result.text);
@@ -433,9 +479,7 @@ export class AbbreviationRewriter {
                 ? (this.abbreviationProvider.getSymbolsForAbbreviation(newText) ?? [])
                 : [];
             const initialIndex =
-              newSymbols.length > 0
-                ? this.abbreviationProvider.getLastSelectedIndex(newText)
-                : 0;
+              newSymbols.length > 0 ? this.abbreviationProvider.getLastSelectedIndex(newText) : 0;
             abbr.setCycleState(newSymbols, initialIndex);
             this.dirtyAbbreviations.add(abbr);
           }

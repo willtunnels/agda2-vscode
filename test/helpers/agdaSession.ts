@@ -66,7 +66,10 @@ export function spawnAgda(binaryPath: string): Promise<AgdaSession> {
       env.Agda_datadir = dataDir;
     }
 
-    const proc = spawn(binaryPath, ["--interaction-json"], {
+    // --no-libraries keeps the tests hermetic: without it, Agda picks up any
+    // .agda-lib project file above the repo on the dev machine (and the user's
+    // ~/.agda config), which changes module resolution for the fixtures.
+    const proc = spawn(binaryPath, ["--interaction-json", "--no-libraries"], {
       stdio: ["pipe", "pipe", "pipe"],
       env,
     });

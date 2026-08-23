@@ -21,11 +21,32 @@ class MockStatusBarItem {
   dispose() {}
 }
 
-/** Minimal mock of vscode.InputBox that captures callbacks. */
+/**
+ * Cursor-faithful mock of vscode.InputBox.
+ *
+ * Unlike the real widget, the cursor position is observable (`cursor`).
+ * Typing inserts at the cursor (not at the end), so cursor-repositioning
+ * bugs in the abbreviation flow garble the value just like they would for
+ * a real user.
+ */
 class MockInputBox {
   value = "";
   prompt = "";
-  valueSelection: [number, number] | undefined;
+
+  /** Live cursor of the (fake) widget. */
+  cursor = 0;
+
+  private _valueSelection: [number, number] | undefined;
+
+  get valueSelection(): [number, number] | undefined {
+    return this._valueSelection;
+  }
+
+  /** Assigning valueSelection moves the widget cursor, like the real widget. */
+  set valueSelection(v: [number, number] | undefined) {
+    this._valueSelection = v;
+    if (v !== undefined) this.cursor = v[1];
+  }
 
   private _onChangeCallbacks: ((value: string) => void)[] = [];
   private _onAcceptCallbacks: (() => void)[] = [];
@@ -48,9 +69,10 @@ class MockInputBox {
 
   // --- Test drivers ---
 
-  /** Simulate typing a single character at the end. */
+  /** Simulate typing a single character at the cursor. */
   type(ch: string) {
-    this.value += ch;
+    this.value = this.value.slice(0, this.cursor) + ch + this.value.slice(this.cursor);
+    this.cursor += ch.length;
     for (const cb of this._onChangeCallbacks) cb(this.value);
   }
 
@@ -59,10 +81,11 @@ class MockInputBox {
     for (const ch of s) this.type(ch);
   }
 
-  /** Simulate pressing backspace (delete last character). */
+  /** Simulate pressing backspace (delete the character before the cursor). */
   backspace() {
-    if (this.value.length === 0) return;
-    this.value = this.value.slice(0, -1);
+    if (this.cursor === 0) return;
+    this.value = this.value.slice(0, this.cursor - 1) + this.value.slice(this.cursor);
+    this.cursor -= 1;
     for (const cb of this._onChangeCallbacks) cb(this.value);
   }
 
@@ -269,6 +292,44 @@ describe("showUnicodeInputBox", () => {
     const result = await showUnicodeInputBox(provider, mockStatusBar as any, { prompt: "test" });
     expect(result).toBe("fallback");
     expect(window.showInputBox).toHaveBeenCalledWith({ prompt: "test" });
+  });
+
+  it("typing \\times character by character yields × with the cursor after it", async () => {
+    // Regression: "times" is reached through the complete abbreviation "t"
+    // (eagerly replaced with ◂) and the incomplete prefix "ti" (which
+    // reverts ◂i → \ti). Each replacement must leave the cursor at the end
+    // of the rewritten text or subsequent characters land mid-abbreviation
+    // (the editor equivalent produced \tmesi).
+    const provider = new AbbreviationProvider({});
+    const promise = showUnicodeInputBox(provider, mockStatusBar as any, { prompt: "test" });
+
+    const settle = () => new Promise((r) => setTimeout(r, 0));
+
+    mockInputBox.type("\\");
+    await settle();
+    mockInputBox.type("t");
+    await settle();
+    expect(mockInputBox.value).toBe("◂"); // eager replacement of "t"
+    expect(mockInputBox.cursor).toBe(1);
+
+    mockInputBox.type("i");
+    await settle();
+    expect(mockInputBox.value).toBe("\\ti"); // reverted to typing mode
+    expect(mockInputBox.cursor).toBe(3); // cursor after the full \ti
+
+    mockInputBox.type("m");
+    await settle();
+    mockInputBox.type("e");
+    await settle();
+    mockInputBox.type("s");
+    await settle();
+
+    expect(mockInputBox.value).toBe("×");
+    expect(mockInputBox.cursor).toBe(1);
+
+    mockInputBox.accept();
+    const result = await promise;
+    expect(result).toBe("×");
   });
 
   it("sets cursor position after replacement", async () => {

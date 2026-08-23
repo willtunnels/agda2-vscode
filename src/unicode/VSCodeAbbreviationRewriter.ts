@@ -18,6 +18,7 @@ import type { TrackedAbbreviation } from "./engine/TrackedAbbreviation";
 import {
   Disposable,
   Range as LineColRange,
+  Selection,
   StatusBarItem,
   TextDocument,
   TextEditor,
@@ -83,6 +84,14 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   /** Non-null while draining. */
   private drainPromise: Promise<void> | null = null;
 
+  /**
+   * Set when user change events raced with our last applyEdit. In that case
+   * the engine's selection mapping is based on a stale document state, so
+   * setSelections must not fight the user's cursor; the raced events re-flow
+   * through the queue and trigger another flush that repositions correctly.
+   */
+  private userEditsRacedWithLastEdit = false;
+
   constructor(
     private readonly leader: string,
     readonly abbreviationProvider: AbbreviationProvider,
@@ -143,6 +152,30 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   }
 
   /**
+   * Apply the engine's post-replacement selection mapping.
+   *
+   * VS Code's own cursor mapping through `workspace.applyEdit` is correct
+   * except when a replacement is longer than the replaced range (the cursor
+   * stays inside the new text, e.g. between `t` and `i` after `◂i` → `\ti`).
+   * Only write selections when they differ from the live ones so the common
+   * correctly-mapped case doesn't produce extra selection events.
+   */
+  setSelections(selections: Range[]): void {
+    if (this.userEditsRacedWithLastEdit) return;
+
+    const doc = this.textEditor.document;
+    const target = selections.map((s) => {
+      const vr = toVsCodeRange(s, doc);
+      return new Selection(vr.start, vr.end);
+    });
+    const current = this.textEditor.selections;
+    const same = current.length === target.length && current.every((c, i) => c.isEqual(target[i]));
+    if (!same) {
+      this.textEditor.selections = target;
+    }
+  }
+
+  /**
    * Apply abbreviation replacements to the document.
    * Uses `workspace.applyEdit()` — `textEditor.edit()` has an internal
    * retry loop that can amplify edits in VS Code Remote.
@@ -165,6 +198,11 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
       const ok = await workspace.applyEdit(wsEdit);
       this.isApplyingEdit = false;
       this.pendingOwnChanges = null;
+
+      // User keystrokes that arrived during the await make the engine's
+      // selection mapping stale (see setSelections).
+      this.userEditsRacedWithLastEdit =
+        this.preFlushBuffer.length > 0 || this.opQueue.some((op) => op.kind === "change");
 
       // Replay pre-flush events with adjusted offsets (if edit succeeded)
       // and post-flush events (already in opQueue from enqueueOp).
@@ -212,7 +250,11 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
     for (let i = 0; i < sortedOwn.length; i++) {
       const e = sortedEvent[i];
       const o = sortedOwn[i];
-      if (e.range.start !== o.range.start || e.range.length !== o.range.length || e.newText !== o.newText) {
+      if (
+        e.range.start !== o.range.start ||
+        e.range.length !== o.range.length ||
+        e.newText !== o.newText
+      ) {
         return false;
       }
     }

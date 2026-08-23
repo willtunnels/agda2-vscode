@@ -36,6 +36,12 @@ class InputBoxTextSource implements AbbreviationTextSource {
    * There `text` holds the old value as a baseline for computing diffs. */
   text = "";
 
+  /* Shadow cursor position. The InputBox API cannot be queried for the live
+   * cursor, so we track it: user edits put the cursor at the end of the
+   * changed text (see onDidChangeValue), and after our own replacements the
+   * engine repositions it via setSelections. */
+  cursor = 0;
+
   /* Reentrancy guard */
   isApplyingEdit = false;
 
@@ -50,28 +56,27 @@ class InputBoxTextSource implements AbbreviationTextSource {
       value = before + c.newText + after;
     }
 
-    // Cursor at the end of the last (bottom-most) change
-    const last = sorted[0]; // sorted descending, so [0] is bottom-most
-    const cursorPos = last.range.start + last.newText.length;
-
     this.isApplyingEdit = true;
     this.text = value;
     this.inputBox.value = value;
-    this.inputBox.valueSelection = [cursorPos, cursorPos];
     this.isApplyingEdit = false;
     return true;
   }
 
   collectSelections(): Range[] {
-    const pos = this.inputBox.valueSelection?.[0] ?? this.text.length;
-    return [new Range(pos, 0)];
+    return [new Range(this.cursor, 0)];
+  }
+
+  setSelections(selections: Range[]): void {
+    const s = selections[0];
+    if (s === undefined) return;
+    this.cursor = s.start + s.length;
+    this.inputBox.valueSelection = [s.start, s.start + s.length];
   }
 }
 
 type QueuedOp =
-  | { kind: "change"; changes: Change[] }
-  | { kind: "cycle"; direction: 1 | -1 }
-  | { kind: "delete" };
+  { kind: "change"; changes: Change[] } | { kind: "cycle"; direction: 1 | -1 } | { kind: "delete" };
 
 export function showUnicodeInputBox(
   provider: AbbreviationProvider,
@@ -174,6 +179,10 @@ export function showUnicodeInputBox(
       textSource.text = newValue;
 
       if (changes.length > 0) {
+        // A user edit leaves the cursor at the end of the inserted text
+        // (typing, paste) or at the deletion point (backspace).
+        const c = changes[0];
+        textSource.cursor = c.range.start + c.newText.length;
         enqueueOp({ kind: "change", changes });
       }
     });
