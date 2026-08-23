@@ -1125,7 +1125,7 @@
   },
   "scripts": {
     "compile": "npm run check-types && node esbuild.js",
-    "check-types": "tsc --noEmit",
+    "check-types": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
@@ -1135,16 +1135,19 @@
     "test:watch": "vitest",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "release": "node scripts/release.mjs"
   },
   "devDependencies": {
     "@types/node": "^25.2.1",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.27.3",
     "husky": "^9.1.7",
     "jest-mock-vscode": "^4.11.0",
     "lint-staged": "^16.2.7",
     "npm-run-all2": "^8.0.4",
+    "ovsx": "^1.1.1",
     "prettier": "^3.8.1",
     "typescript": "^5.7.0",
     "vitest": "^4.0.18"

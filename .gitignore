@@ -10,3 +10,6 @@ dist/
 # Editor files
 .vscode/
 .claude/
+
+# Secrets (release tokens)
+.env

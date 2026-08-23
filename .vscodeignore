@@ -2,12 +2,16 @@
 src/**
 node_modules/**
 test/**
+scripts/**
 **/*.ts
 **/*.map
 .gitignore
+.prettierignore
 tsconfig.json
 esbuild.js
 eslint.config.mjs
+vitest.config.mts
 
 .agda-test-binaries
 .husky
+.env
