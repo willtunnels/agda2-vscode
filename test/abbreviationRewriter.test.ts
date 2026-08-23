@@ -1687,6 +1687,16 @@ describe("mapOffsetThroughChanges", () => {
     expect(mapOffsetThroughChanges(6, multi)).toBe(6); // end of second replacement (5-2+3)
     expect(mapOffsetThroughChanges(8, multi)).toBe(8); // after both: -2 +2
   });
+
+  it("offset at a pure insertion point maps past the inserted text", () => {
+    // The shorten case: backspace empties the span at the cursor, then the
+    // flush INSERTS the shorter abbreviation's text right there. The cursor
+    // must end up after it.
+    const insertion: Change[] = [{ range: new Range(2, 0), newText: "abc" }];
+    expect(mapOffsetThroughChanges(2, insertion)).toBe(5); // at insertion point
+    expect(mapOffsetThroughChanges(1, insertion)).toBe(1); // before: unchanged
+    expect(mapOffsetThroughChanges(3, insertion)).toBe(6); // after: shifted
+  });
 });
 
 describe("Selection repositioning after flush", () => {
@@ -1770,6 +1780,58 @@ describe("Selection repositioning after flush", () => {
     expect(source.text).toBe("⊤ ");
     expect(source.selections).toEqual([new Range(2, 0)]);
     expect(rewriter.getTrackedAbbreviations().size).toBe(0);
+  });
+
+  it("backspacing × places the cursor after the reverted \\time", async () => {
+    // Real table: \times → ×. Backspace deletes × (empty span at offset 0);
+    // the flush inserts "\time" there. Without insertion-point mapping the
+    // cursor stayed at 0 — before the leader.
+    const provider = new AbbreviationProvider({});
+    const source = new MockTextSource("\\times");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "i" }]);
+    rewriter.changeInput([{ range: new Range(3, 0), newText: "m" }]);
+    rewriter.changeInput([{ range: new Range(4, 0), newText: "e" }]);
+    rewriter.changeInput([{ range: new Range(5, 0), newText: "s" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("×");
+
+    // Backspace: × deleted, cursor at 0.
+    source.text = "";
+    source.selections = [new Range(0, 0)];
+    rewriter.changeInput([{ range: new Range(0, 1), newText: "" }]);
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("\\time");
+    expect(source.selections).toEqual([new Range(5, 0)]);
+    const tracked = [...rewriter.getTrackedAbbreviations()];
+    expect(tracked.length).toBe(1);
+    expect(tracked[0].text).toBe("time");
+    expect(tracked[0].isReplaced).toBe(false);
+  });
+
+  it("backspacing to a shorter symbol places the cursor after it", async () => {
+    const provider = new AbbreviationProvider({ t: ["T1"], to: ["→"], top: ["⊤"] });
+    const source = new MockTextSource("\\top");
+    const rewriter = new AbbreviationRewriter("\\", provider, source);
+
+    rewriter.changeInput([{ range: new Range(0, 0), newText: "\\" }]);
+    rewriter.changeInput([{ range: new Range(1, 0), newText: "t" }]);
+    rewriter.changeInput([{ range: new Range(2, 0), newText: "o" }]);
+    rewriter.changeInput([{ range: new Range(3, 0), newText: "p" }]);
+    await rewriter.flushDirty();
+    expect(source.text).toBe("⊤");
+
+    source.text = "";
+    source.selections = [new Range(0, 0)];
+    rewriter.changeInput([{ range: new Range(0, 1), newText: "" }]);
+    await rewriter.flushDirty();
+
+    expect(source.text).toBe("→");
+    expect(source.selections).toEqual([new Range(1, 0)]);
   });
 
   it("does not reposition selections when the edit fails", async () => {

@@ -124,6 +124,7 @@ export function showUnicodeInputBox(
                 break;
             }
           }
+          rewriter.pruneDesynced(textSource.text);
           await rewriter.flushDirty();
           updateStatusBar();
           if (opQueue.length === 0) break;

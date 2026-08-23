@@ -14,6 +14,7 @@ import {
   Range,
 } from "./engine/index";
 import { getErrorMessage } from "../util/errorMessage";
+import { commonPrefixSuffix } from "../util/editAdjust";
 import type { TrackedAbbreviation } from "./engine/TrackedAbbreviation";
 import {
   Disposable,
@@ -72,6 +73,16 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   private pendingOwnChanges: Change[] | null = null;
 
   /**
+   * The full document text expected after {@link pendingOwnChanges} apply.
+   * Fallback for own-edit recognition: VS Code's bulk-edit pipeline runs
+   * `computeMoreMinimalEdits` over edits targeting the active editor, which
+   * may merge adjacent edits or split one edit into several diff hunks —
+   * defeating the exact list comparison. Comparing the resulting document
+   * text identifies our edit regardless of how it was decomposed.
+   */
+  private pendingExpectedText: string | null = null;
+
+  /**
    * Change events that arrived before our own edit event during the await.
    * These are pre-flush user events with pre-flush offsets — they need offset
    * adjustment before being replayed into the queue.
@@ -115,10 +126,15 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
         }));
 
         if (this.pendingOwnChanges !== null) {
-          if (this.matchesOwnEdit(changes)) {
-            // Identified our own edit — skip it.
-            // Future events during this await are post-flush and go to enqueueOp.
+          if (
+            this.matchesOwnEdit(changes) ||
+            this.textEditor.document.getText() === this.pendingExpectedText
+          ) {
+            // Identified our own edit (exactly, or by its effect when VS Code
+            // merged/split it) — skip it. Future events during this await are
+            // post-flush and go to enqueueOp.
             this.pendingOwnChanges = null;
+            this.pendingExpectedText = null;
             return;
           }
           // Pre-flush user event — buffer for offset adjustment.
@@ -187,17 +203,38 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   async replaceAbbreviations(changes: Change[]): Promise<boolean> {
     try {
       const doc = this.textEditor.document;
-      const wsEdit = new WorkspaceEdit();
+
+      // Submit MINIMIZED edits. When a workspace edit targets the active
+      // editor's document, VS Code's bulk-edit pipeline rewrites it via
+      // `computeMoreMinimalEdits` before applying (bulkEditService defaults
+      // the editor to the active one; bulkTextEdits sets `makeMinimal`), and
+      // the content-change events mirror the applied — minimized — edits:
+      // replacing `◂i` with `\ti` is reported as replacing `◂` with `\t`.
+      // Submitting pre-minimized edits keeps matchesOwnEdit's comparison
+      // exact for the common case, and makes VS Code's native cursor mapping
+      // correct for the revert case (the cursor sits after the minimized
+      // edit and shifts by the delta).
+      const minimized: Change[] = [];
       for (const c of changes) {
+        const oldText = doc.getText(toVsCodeRange(c.range, doc));
+        const m = minimizeChange(oldText, c);
+        if (m !== null) minimized.push(m);
+      }
+      if (minimized.length === 0) return true;
+
+      const wsEdit = new WorkspaceEdit();
+      for (const c of minimized) {
         wsEdit.replace(doc.uri, toVsCodeRange(c.range, doc), c.newText);
       }
 
-      this.pendingOwnChanges = changes;
+      this.pendingOwnChanges = minimized;
+      this.pendingExpectedText = applyChangesToText(doc.getText(), minimized);
       this.preFlushBuffer = [];
       this.isApplyingEdit = true;
       const ok = await workspace.applyEdit(wsEdit);
       this.isApplyingEdit = false;
       this.pendingOwnChanges = null;
+      this.pendingExpectedText = null;
 
       // User keystrokes that arrived during the await make the engine's
       // selection mapping stale (see setSelections).
@@ -206,12 +243,13 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
 
       // Replay pre-flush events with adjusted offsets (if edit succeeded)
       // and post-flush events (already in opQueue from enqueueOp).
-      this.replayPreFlushEvents(ok ? changes : null);
+      this.replayPreFlushEvents(ok ? minimized : null);
 
       return ok;
     } catch (e) {
       this.isApplyingEdit = false;
       this.pendingOwnChanges = null;
+      this.pendingExpectedText = null;
       this.replayPreFlushEvents(null);
       // VS Code throws a generic Error (no typed subclass) if the editor
       // closes during the await — harmless, so suppress it.
@@ -225,13 +263,21 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
   /**
    * Replay pre-flush events buffered during the edit await.
    * If `appliedChanges` is provided, adjust offsets through them.
+   *
+   * The replayed events are put at the FRONT of the queue: they were applied
+   * to the document before anything enqueued during the await (which is
+   * post-own-edit by definition), and change events must be processed in
+   * application order or their offsets are interpreted against the wrong
+   * document state — orphaning keystrokes outside the abbreviation.
    */
   private replayPreFlushEvents(appliedChanges: Change[] | null): void {
-    for (const changes of this.preFlushBuffer) {
-      const adjusted = appliedChanges !== null ? adjustOffsets(changes, appliedChanges) : changes;
-      this.opQueue.push({ kind: "change", changes: adjusted });
-    }
+    if (this.preFlushBuffer.length === 0) return;
+    const replayed: QueuedOp[] = this.preFlushBuffer.map((changes) => ({
+      kind: "change",
+      changes: appliedChanges !== null ? adjustOffsets(changes, appliedChanges) : changes,
+    }));
     this.preFlushBuffer = [];
+    this.opQueue.unshift(...replayed);
   }
 
   /**
@@ -307,6 +353,7 @@ export class VSCodeAbbreviationRewriter implements AbbreviationTextSource {
               break;
           }
         }
+        this.rewriter.pruneDesynced(this.textEditor.document.getText());
         await this.rewriter.flushDirty();
         this.updateState();
         if (this.opQueue.length === 0) break;
@@ -415,6 +462,41 @@ export function formatAbbreviationStatusBar(
   }
 
   return `${leader}${abbr.text}`;
+}
+
+/** Apply offset-based changes (disjoint) to a string. */
+export function applyChangesToText(text: string, changes: Change[]): string {
+  const sorted = [...changes].sort((a, b) => b.range.start - a.range.start);
+  for (const c of sorted) {
+    text = text.slice(0, c.range.start) + c.newText + text.slice(c.range.start + c.range.length);
+  }
+  return text;
+}
+
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/**
+ * Minimize a change against the text it replaces: trim the common prefix
+ * and suffix so the edit touches only what actually differs. This is the
+ * form VS Code reports applied edits in, so it is the form we must submit
+ * for own-edit recognition to work (see replaceAbbreviations).
+ *
+ * Trims never split a surrogate pair. Returns null for a no-op change.
+ */
+export function minimizeChange(oldText: string, c: Change): Change | null {
+  let { prefix, suffix } = commonPrefixSuffix(oldText, c.newText);
+  if (prefix > 0 && isHighSurrogate(oldText.charCodeAt(prefix - 1))) prefix--;
+  if (suffix > 0 && isLowSurrogate(oldText.charCodeAt(oldText.length - suffix))) suffix--;
+  const oldLen = oldText.length - prefix - suffix;
+  const newText = c.newText.slice(prefix, c.newText.length - suffix);
+  if (oldLen === 0 && newText.length === 0) return null;
+  return { range: new Range(c.range.start + prefix, oldLen), newText };
 }
 
 /**

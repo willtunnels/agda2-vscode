@@ -32,22 +32,26 @@ export interface AbbreviationTextSource {
  * Map a document offset through a batch of disjoint, ascending-sorted
  * replacements.
  *
- * Offsets at or before the start of a replaced range are unchanged (modulo
- * earlier shifts); offsets strictly inside or at the end of a replaced range
- * map to the end of the replacement text; offsets after it shift by the
- * length delta.
+ * Offsets strictly before a change are unchanged (modulo earlier shifts);
+ * offsets at the left edge of a *replacement* stay put; offsets inside or at
+ * the end of a replaced range — including an offset exactly at a pure
+ * *insertion* point — map to the end of the new text; offsets after a change
+ * shift by the length delta.
  *
  * This encodes the cursor behavior users expect from abbreviation
  * replacement: a cursor sitting at the end of `\ti` must end up after the
- * full replacement text. VS Code's `workspace.applyEdit` does not do this
- * when the replacement is longer than the replaced range (the cursor is
- * left behind, mid-text), so the text source must reposition explicitly.
+ * full replacement text, and a cursor at the spot where a shorten reinserts
+ * a symbol (backspacing `×` leaves an empty span at the cursor, then the
+ * flush inserts `\time` there) must end up after the inserted text. VS
+ * Code's `workspace.applyEdit` does neither, so the text source must
+ * reposition explicitly.
  */
 export function mapOffsetThroughChanges(offset: number, sortedChanges: Change[]): number {
   let shift = 0;
   for (const c of sortedChanges) {
     const start = c.range.start;
-    if (offset <= start) break;
+    if (offset < start) break;
+    if (offset === start && c.range.length > 0) break;
     if (offset <= start + c.range.length) {
       return start + shift + c.newText.length;
     }
@@ -227,6 +231,24 @@ export class AbbreviationRewriter {
         if (abbr.kind === "symbol") {
           this.abbreviationProvider.setLastSelectedIndex(abbr.text, abbr.cycleIndex);
         }
+        this.trackedAbbreviations.delete(abbr);
+      }
+    }
+  }
+
+  /**
+   * Drop (without writing) any tracked abbreviation whose `shown` no longer
+   * matches the document. A mismatch means a change event was lost or
+   * processed against the wrong state (e.g. an unrecognized own edit in an
+   * editor race); writing through it would clobber user text. Dropping
+   * degrades to "this abbreviation stops expanding" — always safe.
+   *
+   * Call at a quiescent point (all known events processed), before a flush.
+   */
+  pruneDesynced(documentText: string): void {
+    for (const abbr of [...this.trackedAbbreviations]) {
+      const inDoc = documentText.slice(abbr.start, abbr.start + abbr.shown.length);
+      if (abbr.start < 0 || inDoc !== abbr.shown) {
         this.trackedAbbreviations.delete(abbr);
       }
     }
